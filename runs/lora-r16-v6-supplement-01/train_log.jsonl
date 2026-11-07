@@ -1,0 +1,5 @@
+{"epoch": 1, "update": 1, "total_updates": 66, "loss": 0.050234483835083665, "learning_rate": 6.666666666666667e-06, "max_memory_gb": 15.634}
+{"epoch": 1, "update": 2, "total_updates": 66, "loss": 0.023605672584380955, "learning_rate": 1.3333333333333333e-05, "max_memory_gb": 15.634}
+{"epoch": 1, "update": 3, "total_updates": 66, "loss": 0.022133686317829415, "learning_rate": 2e-05, "max_memory_gb": 16.596}
+{"epoch": 1, "update": 4, "total_updates": 66, "loss": 0.0411411373570445, "learning_rate": 1.9987569212189224e-05, "max_memory_gb": 16.596}
+{"epoch": 1, "update": 5, "total_updates": 66, "loss": 0.03131136852607597, "learning_rate": 1.9950307753654016e-05, "max_memory_gb": 16.596}

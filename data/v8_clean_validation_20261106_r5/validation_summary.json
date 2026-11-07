@@ -1,0 +1,20 @@
+{
+  "version": "v8-clean-single-control-validation-02-no-train-overlap",
+  "source_samples": 92,
+  "samples": 86,
+  "excluded_cases": [
+    "emr22-1ce59e89298f69d8"
+  ],
+  "excluded_samples": 6,
+  "cases": 18,
+  "hospitals": {
+    "柳城人民": 4,
+    "泉州儿童医院": 28,
+    "石狮": 32,
+    "邵武中医院": 22
+  },
+  "unique_controls": 30,
+  "all_gold_exactly_grounded": true,
+  "html_removed": true,
+  "training_overlap_filtered": true
+}

@@ -1,0 +1,15 @@
+{"epoch": 1, "update": 1, "total_updates": 124, "loss": 0.15354080154793337, "learning_rate": 1.6666666666666667e-06, "max_memory_gb": 13.357}
+{"epoch": 1, "update": 2, "total_updates": 124, "loss": 0.020373859304527286, "learning_rate": 3.3333333333333333e-06, "max_memory_gb": 15.775}
+{"epoch": 1, "update": 3, "total_updates": 124, "loss": 0.39771364656917285, "learning_rate": 5e-06, "max_memory_gb": 15.775}
+{"epoch": 1, "update": 4, "total_updates": 124, "loss": 0.1006731524830684, "learning_rate": 6.666666666666667e-06, "max_memory_gb": 16.551}
+{"epoch": 1, "update": 5, "total_updates": 124, "loss": 0.19546446410822682, "learning_rate": 8.333333333333334e-06, "max_memory_gb": 16.551}
+{"epoch": 1, "update": 6, "total_updates": 124, "loss": 0.5129774383094627, "learning_rate": 1e-05, "max_memory_gb": 16.551}
+{"epoch": 1, "update": 7, "total_updates": 124, "loss": 0.04442864766679122, "learning_rate": 9.998228055617264e-06, "max_memory_gb": 16.551}
+{"epoch": 1, "update": 8, "total_updates": 124, "loss": 0.014695486999698915, "learning_rate": 9.99291347838381e-06, "max_memory_gb": 16.551}
+{"epoch": 1, "update": 9, "total_updates": 124, "loss": 0.3356592273376009, "learning_rate": 9.984060035153752e-06, "max_memory_gb": 16.551}
+{"epoch": 1, "update": 10, "total_updates": 124, "loss": 0.1876550313900225, "learning_rate": 9.971674001050687e-06, "max_memory_gb": 16.551}
+{"epoch": 1, "update": 11, "total_updates": 124, "loss": 0.006989477424212964, "learning_rate": 9.955764155020037e-06, "max_memory_gb": 16.551}
+{"epoch": 1, "update": 12, "total_updates": 124, "loss": 0.2525345145841129, "learning_rate": 9.936341773606723e-06, "max_memory_gb": 16.551}
+{"epoch": 1, "update": 13, "total_updates": 124, "loss": 0.6690624861075776, "learning_rate": 9.913420622962606e-06, "max_memory_gb": 16.551}
+{"epoch": 1, "update": 14, "total_updates": 124, "loss": 0.3154681105770578, "learning_rate": 9.887016949089334e-06, "max_memory_gb": 16.551}
+{"epoch": 1, "update": 15, "total_updates": 124, "loss": 0.0033997960563283414, "learning_rate": 9.85714946632355e-06, "max_memory_gb": 16.551}

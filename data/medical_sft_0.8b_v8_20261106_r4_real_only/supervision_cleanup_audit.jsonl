@@ -1,0 +1,8 @@
+{"id":"v7db-liucheng-first_progress-87cf35ef66f1f5f0::8418806e2129","control_name":"年龄(岁)","before":"34岁岁","after":"34岁","reasons":["redundant_unit_removed"]}
+{"id":"v7db-quanzhou_child-admission-32776ad09ae77d46::d6ad17b10dad","control_name":"预防接种史","before":"：不详。","after":"不详。","reasons":["leading_delimiter_removed"]}
+{"id":"v7db-quanzhou_child-admission-918f1dd9c2b00ec3::55d7e2eb5579","control_name":"呼吸频率(次/min)","before":"0 次/分","after":"0","reasons":["redundant_unit_removed"]}
+{"id":"v7db-shishi-admission-2c9f6a3ec4a7062e::8004213c68c2","control_name":"预防接种史","before":"：不详。","after":"不详。","reasons":["leading_delimiter_removed"]}
+{"id":"v7db-shishi-admission-32bc6f75b779a0c7::0f6a0e9b14d3","control_name":"月经史","before":"，绝经7年，白带量中，无异味。","after":"绝经7年，白带量中，无异味。","reasons":["leading_delimiter_removed"]}
+{"id":"v7db-shishi-admission-54d7a70e1ec473ce::629e9e704659","control_name":"预防接种史","before":"：不详","after":"不详","reasons":["leading_delimiter_removed"]}
+{"id":"v7db-shishi-admission-6bacaa85716dc40c::2ac98cf992f8","control_name":"过敏史","before":"：未发现。","after":"未发现。","reasons":["leading_delimiter_removed"]}
+{"id":"v7db-shishi-admission-a3ac5193784df65b::478be139b2bf","control_name":"体温","before":"36.6℃","after":"36.6","reasons":["redundant_unit_removed"]}

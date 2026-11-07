@@ -1,0 +1,702 @@
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import secrets
+import signal
+import subprocess
+import threading
+import time
+from datetime import datetime
+from http import HTTPStatus
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+
+
+ROOT = Path("/root/medical-v5")
+SCRIPTS = ROOT / "scripts"
+DATA = ROOT / "data"
+RUNS = ROOT / "runs"
+DASHBOARD_DIR = ROOT / "dashboard"
+STATE_PATH = DASHBOARD_DIR / "state.json"
+MODEL_PATH = "/root/qwen35-0.8b-base"
+
+LOCK = threading.RLock()
+PROCESS: subprocess.Popen | None = None
+LOG_HANDLE = None
+AUTH_TOKEN = ""
+
+
+DEFAULT_CONFIG = {
+    "run_name": "lora-r16-v5",
+    "epochs": 3,
+    "max_length": 8192,
+    "gradient_accumulation": 8,
+    "learning_rate": 0.0002,
+    "lora_rank": 16,
+    "lora_alpha": 32,
+    "lora_dropout": 0.05,
+    "validation_loss_samples": 12,
+}
+
+
+HTML = r"""<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Qwen3.5-0.8B v5 训练控制台</title>
+  <style>
+    :root{--bg:#07111f;--panel:#101d2d;--panel2:#15263a;--line:#29425d;--text:#e8f0f7;--muted:#91a8bc;--blue:#4fa3ff;--green:#39d98a;--red:#ff667a;--amber:#ffc857}
+    *{box-sizing:border-box} body{margin:0;background:linear-gradient(135deg,#07111f,#0b1727 55%,#081422);color:var(--text);font-family:Inter,"Microsoft YaHei",system-ui,sans-serif}
+    .wrap{max-width:1380px;margin:auto;padding:24px}.head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:20px}
+    h1{font-size:24px;margin:0 0 7px}.sub{color:var(--muted);font-size:14px}.badge{padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:#0c1a2a;color:var(--muted)}
+    .grid{display:grid;grid-template-columns:420px 1fr;gap:18px}.panel{background:rgba(16,29,45,.94);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:0 14px 36px rgba(0,0,0,.18)}
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px}.stat{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:14px}.stat .k{color:var(--muted);font-size:12px;margin-bottom:8px}.stat .v{font-weight:700;font-size:18px}.good{color:var(--green)}.bad{color:var(--red)}.warn{color:var(--amber)}
+    h2{font-size:16px;margin:0 0 15px}.form{display:grid;grid-template-columns:1fr 1fr;gap:12px}.full{grid-column:1/-1}label{display:block;color:var(--muted);font-size:12px;margin-bottom:6px}
+    input,select{width:100%;background:#091523;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:10px 11px;outline:none}input:focus,select:focus{border-color:var(--blue)}input:disabled,select:disabled{opacity:.55}
+    .buttons{display:flex;gap:10px;margin-top:16px}button{border:0;border-radius:9px;padding:11px 15px;font-weight:700;cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}.primary{background:var(--blue);color:#04101c}.danger{background:#3b1721;color:#ff9dac;border:1px solid #6c2a3a}.secondary{background:#1d354e;color:var(--text);border:1px solid var(--line)}
+    .progressbox{margin:0 0 14px}.progressline{display:flex;justify-content:space-between;color:var(--muted);font-size:12px;margin-bottom:7px}.track{height:10px;background:#07111d;border:1px solid var(--line);border-radius:99px;overflow:hidden}.bar{height:100%;width:0;background:linear-gradient(90deg,var(--blue),var(--green));transition:width .3s}
+    pre{height:540px;margin:0;overflow:auto;white-space:pre-wrap;word-break:break-word;background:#050d17;border:1px solid #20364d;border-radius:10px;padding:14px;color:#b9d2e7;font:12px/1.55 "Cascadia Mono",Consolas,monospace}
+    .checkpoints{margin-top:14px;color:var(--muted);font-size:13px}.checkpoints span{display:inline-block;margin:5px 6px 0 0;padding:5px 8px;background:#0a1726;border:1px solid var(--line);border-radius:7px;color:#c8d9e8}
+    .notice{min-height:20px;margin-top:10px;font-size:13px;color:var(--amber)}
+    .evalpanel{margin-top:18px}.evalbar{display:grid;grid-template-columns:minmax(260px,1fr) auto;gap:12px;align-items:end}.metrics{overflow:auto;margin-top:15px}table{width:100%;border-collapse:collapse;font-size:13px}th,td{padding:10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th:first-child,td:first-child{text-align:left}th{color:var(--muted);font-weight:600}.empty{color:var(--muted);padding:10px 0}
+    @media(max-width:900px){.grid{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}.head{flex-direction:column}.panel{padding:14px}}
+  </style>
+</head>
+<body><div class="wrap">
+  <div class="head"><div><h1>Qwen3.5-0.8B v5 训练控制台</h1><div class="sub">病历抽取 LoRA · 数据、基线和微调统一使用提示词 v5</div></div><div id="authBadge" class="badge">连接中</div></div>
+  <div class="stats">
+    <div class="stat"><div class="k">任务状态</div><div id="jobStatus" class="v">--</div></div>
+    <div class="stat"><div class="k">GPU 显存</div><div id="gpu" class="v">--</div></div>
+    <div class="stat"><div class="k">训练进度</div><div id="steps" class="v">--</div></div>
+    <div class="stat"><div class="k">磁盘可用</div><div id="disk" class="v">--</div></div>
+  </div>
+  <div class="grid">
+    <div class="panel">
+      <h2>训练参数</h2>
+      <div class="form" id="form">
+        <div class="full"><label>运行名称</label><input id="run_name" value="lora-r16-v5"></div>
+        <div><label>训练轮数 epochs</label><input id="epochs" type="number" min="1" max="20" value="3"></div>
+        <div><label>最大长度 max_length</label><input id="max_length" type="number" min="2048" max="65536" step="1024" value="8192"></div>
+        <div><label>梯度累计</label><input id="gradient_accumulation" type="number" min="1" max="128" value="8"></div>
+        <div><label>学习率</label><input id="learning_rate" type="number" min="0.000001" max="0.01" step="0.00001" value="0.0002"></div>
+        <div><label>LoRA rank</label><input id="lora_rank" type="number" min="2" max="256" value="16"></div>
+        <div><label>LoRA alpha</label><input id="lora_alpha" type="number" min="2" max="512" value="32"></div>
+        <div><label>LoRA dropout</label><input id="lora_dropout" type="number" min="0" max="0.5" step="0.01" value="0.05"></div>
+        <div><label>验证 loss 样本数</label><input id="validation_loss_samples" type="number" min="0" max="30" value="12"></div>
+      </div>
+      <div class="buttons"><button id="start" class="primary" onclick="startTraining()">开始训练</button><button id="stop" class="danger" onclick="stopTraining()">停止任务</button><button class="secondary" onclick="refreshAll()">刷新</button></div>
+      <div id="notice" class="notice"></div>
+      <div class="checkpoints"><b>已生成 checkpoint</b><div id="checkpoints">暂无</div></div>
+    </div>
+    <div class="panel">
+      <h2>实时进度与日志</h2>
+      <div class="progressbox"><div class="progressline"><span id="progressText">等待任务</span><span id="loss">loss --</span></div><div class="track"><div id="bar" class="bar"></div></div></div>
+      <pre id="log">正在连接服务器...</pre>
+    </div>
+  </div>
+  <div class="panel evalpanel">
+    <h2>抽取效果验证（内部验证集 30 例）</h2>
+    <div class="evalbar"><div><label>评测目标</label><select id="evalTarget"><option value="">原始 Qwen3.5-0.8B（基线）</option></select></div><button id="evaluate" class="primary" onclick="startEvaluation()">开始评测</button></div>
+    <div class="sub" style="margin-top:9px">重点比较 JSON 合法率、精确率、召回率、F1、原文命中率和长段落召回率。训练 loss 只用于观察是否收敛，不能代替抽取指标。</div>
+    <div id="metrics" class="metrics"><div class="empty">暂无完整评测结果</div></div>
+  </div>
+</div>
+<script>
+const qs=new URLSearchParams(location.search); let token=qs.get('token')||localStorage.getItem('medicalV5Token')||''; if(token)localStorage.setItem('medicalV5Token',token);
+const ids=['run_name','epochs','max_length','gradient_accumulation','learning_rate','lora_rank','lora_alpha','lora_dropout','validation_loss_samples'];
+async function api(path,opt={}){opt.headers={...(opt.headers||{}),'X-Auth-Token':token}; if(opt.body)opt.headers['Content-Type']='application/json'; const r=await fetch(path,opt); const j=await r.json(); if(!r.ok)throw new Error(j.error||r.statusText); return j}
+function setNotice(x,bad=false){const e=document.getElementById('notice');e.textContent=x;e.style.color=bad?'var(--red)':'var(--amber)'}
+async function refreshAll(){try{const s=await api('/api/status'); document.getElementById('authBadge').textContent='已安全连接'; document.getElementById('authBadge').className='badge good';
+  const running=s.running; const st=document.getElementById('jobStatus'); st.textContent=running?'运行中':(s.status||'空闲');st.className='v '+(running?'good':s.status==='失败'?'bad':'');
+  const ep=s.evaluation_progress;document.getElementById('gpu').textContent=s.gpu||'--';document.getElementById('disk').textContent=s.disk||'--';document.getElementById('steps').textContent=s.progress?`${s.progress.update}/${s.progress.total_updates}`:(ep?`${ep.completed}/${ep.total}`:'--');
+  const pct=s.progress&&s.progress.total_updates?100*s.progress.update/s.progress.total_updates:(ep&&ep.total?100*ep.completed/ep.total:0);document.getElementById('bar').style.width=Math.min(100,pct)+'%';document.getElementById('progressText').textContent=s.progress?`epoch ${s.progress.epoch} · ${pct.toFixed(1)}%`:(ep?`验证 ${ep.completed}/${ep.total} · ${pct.toFixed(1)}%`:'等待任务');document.getElementById('loss').textContent=s.progress&&s.progress.loss!=null?`loss ${Number(s.progress.loss).toFixed(4)}`:'loss --';
+  ids.forEach(id=>document.getElementById(id).disabled=running);document.getElementById('start').disabled=running;document.getElementById('stop').disabled=!running;document.getElementById('evaluate').disabled=running;document.getElementById('evalTarget').disabled=running;
+  document.getElementById('checkpoints').innerHTML=(s.checkpoints||[]).map(x=>`<span>${x}</span>`).join('')||'暂无';
+  const sel=document.getElementById('evalTarget'),old=sel.value;sel.innerHTML='<option value="">原始 Qwen3.5-0.8B（基线）</option>'+ (s.checkpoints||[]).map(x=>`<option value="${x}">${x}</option>`).join('');if([...sel.options].some(o=>o.value===old))sel.value=old;renderMetrics(s.evaluations||[]);
+  const l=await api('/api/log?tail=300');const box=document.getElementById('log');const nearBottom=box.scrollHeight-box.scrollTop-box.clientHeight<80;box.textContent=l.log||'暂无日志';if(nearBottom)box.scrollTop=box.scrollHeight;
+}catch(e){document.getElementById('authBadge').textContent='令牌无效或服务未连接';document.getElementById('authBadge').className='badge bad';setNotice(e.message,true)}}
+function values(){const x={};ids.forEach(id=>{const el=document.getElementById(id);x[id]=id==='run_name'?el.value:Number(el.value)});return x}
+function pct(x){return x==null?'--':(100*Number(x)).toFixed(1)+'%'}
+function renderMetrics(rows){
+  const box=document.getElementById('metrics');
+  if(!rows.length){box.innerHTML='<div class="empty">暂无完整评测结果</div>';return}
+  const structured=rows.filter(r=>r.report_type!=='single_control');
+  const controls=rows.filter(r=>r.report_type==='single_control');
+  let html='';
+  if(structured.length){
+    html+='<h3>完整病历抽取评测</h3><table><thead><tr><th>模型/Checkpoint</th><th>JSON合法</th><th>精确率</th><th>召回率</th><th>总F1</th><th>标准集F1</th><th>困难集F1</th><th>原文命中</th><th>病例全对</th><th>长段落召回</th></tr></thead><tbody>'+structured.map(r=>{const m=r.overall,n=m.whitespace_normalized,d=r.by_difficulty||{},sf=d.standard&&d.standard.whitespace_normalized,hf=d.hard&&d.hard.whitespace_normalized;return `<tr><td>${r.name}</td><td>${pct(m.json_valid_rate)}</td><td>${pct(n.precision)}</td><td>${pct(n.recall)}</td><td>${pct(n.f1)}</td><td>${sf?pct(sf.f1):'--'}</td><td>${hf?pct(hf.f1):'--'}</td><td>${pct(m.grounding_rate)}</td><td>${pct(m.case_exact_rate)}</td><td>${pct(m.long_extraction_recall)}</td></tr>`}).join('')+'</tbody></table>';
+  }
+  if(controls.length){
+    html+='<h3>四院单控件评测</h3><table><thead><tr><th>模型/Checkpoint</th><th>样本</th><th>完全匹配</th><th>字符精确率</th><th>字符召回率</th><th>字符F1</th><th>原文命中</th><th>空预测</th><th>格式包裹</th></tr></thead><tbody>'+controls.map(r=>{const m=r.overall;return `<tr><td>${r.name}</td><td>${m.samples??'--'}</td><td>${pct(m.exact_accuracy)}</td><td>${pct(m.char_precision)}</td><td>${pct(m.char_recall)}</td><td>${pct(m.char_f1)}</td><td>${pct(m.prediction_grounded_rate)}</td><td>${m.empty_predictions??'--'}</td><td>${m.format_wrapped??'--'}</td></tr>`}).join('')+'</tbody></table>';
+  }
+  box.innerHTML=html;
+}
+async function startTraining(){if(!confirm('确认按当前参数启动 v5 LoRA 训练？'))return;try{const r=await api('/api/start',{method:'POST',body:JSON.stringify(values())});setNotice(r.message);refreshAll()}catch(e){setNotice(e.message,true)}}
+async function startEvaluation(){const adapter=document.getElementById('evalTarget').value;if(!confirm(`确认开始评测 ${adapter||'原始 0.8B 基线'}？`))return;try{const r=await api('/api/evaluate',{method:'POST',body:JSON.stringify({adapter})});setNotice(r.message);refreshAll()}catch(e){setNotice(e.message,true)}}
+async function stopTraining(){if(!confirm('确认停止当前任务？已保存的 checkpoint 不会删除。'))return;try{const r=await api('/api/stop',{method:'POST',body:'{}'});setNotice(r.message);setTimeout(refreshAll,800)}catch(e){setNotice(e.message,true)}}
+refreshAll();setInterval(refreshAll,2500);
+</script></body></html>"""
+
+
+def write_state(state: dict) -> None:
+    DASHBOARD_DIR.mkdir(parents=True, exist_ok=True)
+    STATE_PATH.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def read_state() -> dict:
+    if not STATE_PATH.exists():
+        return {}
+    try:
+        return json.loads(STATE_PATH.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def pid_alive(pid: int | None) -> bool:
+    if not pid:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def running() -> bool:
+    global PROCESS
+    with LOCK:
+        if PROCESS is not None:
+            return PROCESS.poll() is None
+        return pid_alive(read_state().get("pid"))
+
+
+def base_model_ready() -> bool:
+    model_dir = Path(MODEL_PATH)
+    if not (model_dir / "config.json").is_file():
+        return False
+    weights = list(model_dir.glob("*.safetensors"))
+    return bool(weights) and all(path.stat().st_size > 1_000_000 for path in weights)
+
+
+def run_text(command: list[str]) -> str:
+    try:
+        result = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        return result.stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+def latest_progress(run_dir: Path | None) -> dict | None:
+    if run_dir is None:
+        return None
+    path = run_dir / "train_log.jsonl"
+    if not path.exists():
+        return None
+    latest = None
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines()[-100:]:
+            row = json.loads(line)
+            if "update" in row:
+                latest = row
+    except (OSError, json.JSONDecodeError):
+        return latest
+    return latest
+
+
+def available_checkpoints() -> list[str]:
+    checkpoints = []
+    for path in RUNS.glob("*/checkpoint-epoch-*"):
+        if path.is_dir() and (path / "adapter_config.json").is_file():
+            checkpoints.append(path.relative_to(RUNS).as_posix())
+    return sorted(checkpoints)
+
+
+def evaluation_progress(
+    job_log: Path | None, run_dir: Path | None
+) -> dict | None:
+    if job_log is not None and job_log.exists():
+        try:
+            matches = re.findall(
+                r"(?m)^\[(\d+)/(\d+)\]",
+                job_log.read_text(encoding="utf-8", errors="replace"),
+            )
+            if matches:
+                completed, total = matches[-1]
+                return {"completed": int(completed), "total": int(total)}
+        except OSError:
+            pass
+    predictions = run_dir / "predictions.jsonl" if run_dir else None
+    validation = DATA / "validation_v5.jsonl"
+    if predictions is None or not predictions.exists() or not validation.exists():
+        return None
+    try:
+        completed = sum(
+            bool(line.strip())
+            for line in predictions.read_text(encoding="utf-8").splitlines()
+        )
+        total = sum(
+            bool(line.strip())
+            for line in validation.read_text(encoding="utf-8").splitlines()
+        )
+        return {"completed": completed, "total": total}
+    except OSError:
+        return None
+
+
+def evaluation_reports() -> list[dict]:
+    reports = []
+    for path in RUNS.rglob("metrics.json"):
+        try:
+            report = json.loads(path.read_text(encoding="utf-8"))
+            reports.append(
+                {
+                    "name": path.parent.relative_to(RUNS).as_posix(),
+                    "report_type": "structured",
+                    "adapter": report.get("adapter"),
+                    "overall": report["overall"],
+                    "by_difficulty": report.get("by_difficulty", {}),
+                }
+            )
+        except (OSError, KeyError, json.JSONDecodeError):
+            continue
+    for path in (RUNS / "evaluations").rglob("summary.json"):
+        try:
+            report = json.loads(path.read_text(encoding="utf-8"))
+            overall = report["overall"]
+            if "samples" not in overall or "exact_accuracy" not in overall:
+                continue
+            reports.append(
+                {
+                    "name": path.parent.relative_to(RUNS).as_posix(),
+                    "report_type": "single_control",
+                    "adapter": report.get("adapter"),
+                    "overall": overall,
+                }
+            )
+        except (OSError, KeyError, json.JSONDecodeError):
+            continue
+    return sorted(reports, key=lambda item: item["name"])
+
+
+def status_payload() -> dict:
+    state = read_state()
+    is_running = running()
+    run_dir = Path(state["run_dir"]) if state.get("run_dir") else None
+    if not is_running and state.get("status") in {"运行中", "评测中"}:
+        if state.get("kind") == "evaluate":
+            state["status"] = (
+                "任务完成"
+                if run_dir
+                and (
+                    (run_dir / "metrics.json").is_file()
+                    or (run_dir / "summary.json").is_file()
+                )
+                else "评测已结束（未生成指标）"
+            )
+        else:
+            state["status"] = (
+                "训练完成"
+                if run_dir and (run_dir / "final").is_dir()
+                else "训练已结束（未生成最终模型）"
+            )
+        state["ended_at"] = datetime.now().isoformat(timespec="seconds")
+        write_state(state)
+    gpu_raw = run_text(
+        [
+            "nvidia-smi",
+            "--query-gpu=memory.used,memory.total,utilization.gpu",
+            "--format=csv,noheader,nounits",
+        ]
+    )
+    gpu = "--"
+    if gpu_raw:
+        parts = [part.strip() for part in gpu_raw.splitlines()[0].split(",")]
+        if len(parts) == 3:
+            gpu = f"{parts[0]}/{parts[1]} MiB · {parts[2]}%"
+    disk_raw = run_text(["df", "-BG", "--output=avail", "/"])
+    disk = disk_raw.splitlines()[-1].strip() if disk_raw else "--"
+    job_log = Path(state["job_log"]) if state.get("job_log") else None
+    return {
+        "running": is_running,
+        "status": state.get("status", "空闲"),
+        "pid": state.get("pid"),
+        "run_name": state.get("run_name"),
+        "gpu": gpu,
+        "disk": disk,
+        "progress": latest_progress(run_dir),
+        "evaluation_progress": evaluation_progress(job_log, run_dir)
+        if state.get("kind") == "evaluate"
+        else None,
+        "checkpoints": available_checkpoints(),
+        "evaluations": evaluation_reports(),
+        "data_ready": (DATA / "train_v5_weighted.jsonl").exists(),
+        "model_ready": base_model_ready(),
+    }
+
+
+def validate_config(payload: dict) -> dict:
+    config = DEFAULT_CONFIG.copy()
+    config.update(payload)
+    run_name = str(config["run_name"]).strip()
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", run_name):
+        raise ValueError("运行名称只能使用字母、数字、点、下划线和短横线")
+    bounds = {
+        "epochs": (1, 20, int),
+        "max_length": (2048, 65536, int),
+        "gradient_accumulation": (1, 128, int),
+        "learning_rate": (1e-6, 1e-2, float),
+        "lora_rank": (2, 256, int),
+        "lora_alpha": (2, 512, int),
+        "lora_dropout": (0.0, 0.5, float),
+        "validation_loss_samples": (0, 30, int),
+    }
+    for key, (minimum, maximum, cast) in bounds.items():
+        value = cast(config[key])
+        if not minimum <= value <= maximum:
+            raise ValueError(f"{key} 必须在 {minimum} 到 {maximum} 之间")
+        config[key] = value
+    config["run_name"] = run_name
+    return config
+
+
+def start_training(payload: dict) -> dict:
+    global PROCESS, LOG_HANDLE
+    with LOCK:
+        if running():
+            raise ValueError("已有任务正在运行")
+        config = validate_config(payload)
+        train_data = DATA / "train_v5_weighted.jsonl"
+        clean_validation_data = DATA / "validation_v5_clean_20261105.jsonl"
+        validation_data = (
+            clean_validation_data
+            if clean_validation_data.is_file()
+            else DATA / "validation_v5.jsonl"
+        )
+        script = SCRIPTS / "train_lora_v5.py"
+        for path in (train_data, validation_data, script):
+            if not path.exists():
+                raise ValueError(f"缺少运行文件：{path}")
+        if not base_model_ready():
+            raise ValueError("基础模型尚未下载完整")
+        run_dir = (RUNS / config["run_name"]).resolve()
+        if run_dir.parent != RUNS.resolve():
+            raise ValueError("非法运行目录")
+        if run_dir.exists() and any(run_dir.iterdir()):
+            raise ValueError("运行目录已存在且非空，请换一个运行名称")
+        run_dir.mkdir(parents=True, exist_ok=True)
+        job_log = run_dir / "dashboard_job.log"
+        command = [
+            "python",
+            str(script),
+            "--model",
+            MODEL_PATH,
+            "--train-data",
+            str(train_data),
+            "--validation-data",
+            str(validation_data),
+            "--output-dir",
+            str(run_dir),
+            "--epochs",
+            str(config["epochs"]),
+            "--max-length",
+            str(config["max_length"]),
+            "--gradient-accumulation",
+            str(config["gradient_accumulation"]),
+            "--learning-rate",
+            str(config["learning_rate"]),
+            "--lora-rank",
+            str(config["lora_rank"]),
+            "--lora-alpha",
+            str(config["lora_alpha"]),
+            "--lora-dropout",
+            str(config["lora_dropout"]),
+            "--validation-loss-samples",
+            str(config["validation_loss_samples"]),
+        ]
+        LOG_HANDLE = job_log.open("a", encoding="utf-8", buffering=1)
+        PROCESS = subprocess.Popen(
+            command,
+            cwd=str(ROOT),
+            stdout=LOG_HANDLE,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            text=True,
+            env={**os.environ, "PYTHONUNBUFFERED": "1", "TOKENIZERS_PARALLELISM": "false"},
+        )
+        state = {
+            "status": "运行中",
+            "kind": "train",
+            "pid": PROCESS.pid,
+            "run_name": config["run_name"],
+            "run_dir": str(run_dir),
+            "job_log": str(job_log),
+            "started_at": datetime.now().isoformat(timespec="seconds"),
+            "config": config,
+            "command": command,
+        }
+        write_state(state)
+        threading.Thread(
+            target=watch_process,
+            args=(PROCESS, PROCESS.pid, LOG_HANDLE),
+            daemon=True,
+        ).start()
+        return {"message": f"训练已启动，PID {PROCESS.pid}"}
+
+
+def start_evaluation(payload: dict) -> dict:
+    global PROCESS, LOG_HANDLE
+    with LOCK:
+        if running():
+            raise ValueError("已有任务正在运行")
+        script = SCRIPTS / "evaluate_v5.py"
+        clean_validation_data = DATA / "validation_v5_clean_20261105.jsonl"
+        validation_data = (
+            clean_validation_data
+            if clean_validation_data.is_file()
+            else DATA / "validation_v5.jsonl"
+        )
+        if not script.is_file() or not validation_data.is_file():
+            raise ValueError("缺少评测脚本或内部验证集")
+        if not base_model_ready():
+            raise ValueError("基础模型尚未下载完整")
+
+        adapter_value = str(payload.get("adapter", "")).strip()
+        adapter_path = None
+        if adapter_value:
+            adapter_path = (RUNS / adapter_value).resolve()
+            try:
+                adapter_path.relative_to(RUNS.resolve())
+            except ValueError as exc:
+                raise ValueError("非法 checkpoint 路径") from exc
+            if not (adapter_path / "adapter_config.json").is_file():
+                raise ValueError("所选 checkpoint 不存在或不完整")
+            result_name = "eval-" + adapter_value.replace("/", "--")
+        else:
+            result_name = "baseline-v5"
+        if validation_data == clean_validation_data:
+            result_name += "-clean-production"
+
+        result_dir = RUNS / "evaluations" / result_name
+        if (result_dir / "metrics.json").is_file():
+            raise ValueError("该模型已评测完成，结果已显示在页面中")
+        result_dir.mkdir(parents=True, exist_ok=True)
+        job_log = result_dir / "dashboard_job.log"
+        command = [
+            "python",
+            str(script),
+            "--model",
+            MODEL_PATH,
+            "--data",
+            str(validation_data),
+            "--output-dir",
+            str(result_dir),
+            "--max-new-tokens",
+            "4096",
+        ]
+        if adapter_path is not None:
+            command.extend(["--adapter", str(adapter_path)])
+        LOG_HANDLE = job_log.open("a", encoding="utf-8", buffering=1)
+        PROCESS = subprocess.Popen(
+            command,
+            cwd=str(ROOT),
+            stdout=LOG_HANDLE,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+            text=True,
+            env={
+                **os.environ,
+                "PYTHONUNBUFFERED": "1",
+                "TOKENIZERS_PARALLELISM": "false",
+            },
+        )
+        state = {
+            "status": "评测中",
+            "kind": "evaluate",
+            "pid": PROCESS.pid,
+            "run_name": result_name,
+            "run_dir": str(result_dir),
+            "job_log": str(job_log),
+            "started_at": datetime.now().isoformat(timespec="seconds"),
+            "adapter": str(adapter_path) if adapter_path else None,
+            "command": command,
+        }
+        write_state(state)
+        threading.Thread(
+            target=watch_process,
+            args=(PROCESS, PROCESS.pid, LOG_HANDLE),
+            daemon=True,
+        ).start()
+        target_name = adapter_value or "原始 0.8B 基线"
+        return {"message": f"已开始评测：{target_name}，PID {PROCESS.pid}"}
+
+
+def watch_process(process: subprocess.Popen, pid: int, log_handle) -> None:
+    global PROCESS, LOG_HANDLE
+    return_code = process.wait()
+    with LOCK:
+        state = read_state()
+        if state.get("pid") == pid and state.get("status") in {"运行中", "评测中"}:
+            state["status"] = (
+                "任务完成" if return_code == 0 else f"任务失败（退出码 {return_code}）"
+            )
+            state["ended_at"] = datetime.now().isoformat(timespec="seconds")
+            state["return_code"] = return_code
+            write_state(state)
+        if LOG_HANDLE is log_handle:
+            log_handle.close()
+            LOG_HANDLE = None
+        if PROCESS is process:
+            PROCESS = None
+
+
+def stop_job() -> dict:
+    global PROCESS, LOG_HANDLE
+    with LOCK:
+        state = read_state()
+        pid = state.get("pid")
+        if not pid_alive(pid):
+            raise ValueError("当前没有运行中的任务")
+        try:
+            os.killpg(pid, signal.SIGINT)
+        except ProcessLookupError:
+            pass
+        if PROCESS is not None:
+            try:
+                PROCESS.wait(timeout=12)
+            except subprocess.TimeoutExpired:
+                os.killpg(pid, signal.SIGTERM)
+        state["status"] = "已手动停止"
+        state["ended_at"] = datetime.now().isoformat(timespec="seconds")
+        write_state(state)
+        if LOG_HANDLE is not None:
+            LOG_HANDLE.close()
+            LOG_HANDLE = None
+        PROCESS = None
+        return {"message": "任务已停止，已有 checkpoint 已保留"}
+
+
+def tail_log(lines: int) -> str:
+    state = read_state()
+    path_value = state.get("job_log")
+    if not path_value:
+        return ""
+    path = Path(path_value)
+    if not path.exists():
+        return ""
+    try:
+        return "\n".join(path.read_text(encoding="utf-8", errors="replace").splitlines()[-lines:])
+    except OSError:
+        return ""
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "MedicalV5Dashboard/1.0"
+
+    def log_message(self, format_: str, *args) -> None:
+        print(f"[{self.log_date_time_string()}] {format_ % args}", flush=True)
+
+    def send_json(self, payload: dict, status: int = 200) -> None:
+        data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(data)
+
+    def authorized(self) -> bool:
+        supplied = self.headers.get("X-Auth-Token", "")
+        if not supplied:
+            supplied = parse_qs(urlparse(self.path).query).get("token", [""])[0]
+        return secrets.compare_digest(supplied, AUTH_TOKEN)
+
+    def require_auth(self) -> bool:
+        if self.authorized():
+            return True
+        self.send_json({"error": "访问令牌无效"}, HTTPStatus.UNAUTHORIZED)
+        return False
+
+    def read_json(self) -> dict:
+        length = int(self.headers.get("Content-Length", "0"))
+        if length > 100_000:
+            raise ValueError("请求体过大")
+        raw = self.rfile.read(length) if length else b"{}"
+        payload = json.loads(raw.decode("utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("请求必须是 JSON 对象")
+        return payload
+
+    def do_GET(self) -> None:
+        route = urlparse(self.path).path
+        if route == "/":
+            data = HTML.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(data)
+            return
+        if not self.require_auth():
+            return
+        if route == "/api/status":
+            self.send_json(status_payload())
+        elif route == "/api/config":
+            self.send_json(DEFAULT_CONFIG)
+        elif route == "/api/log":
+            query = parse_qs(urlparse(self.path).query)
+            lines = min(1000, max(20, int(query.get("tail", [300])[0])))
+            self.send_json({"log": tail_log(lines)})
+        else:
+            self.send_json({"error": "接口不存在"}, HTTPStatus.NOT_FOUND)
+
+    def do_POST(self) -> None:
+        if not self.require_auth():
+            return
+        route = urlparse(self.path).path
+        try:
+            payload = self.read_json()
+            if route == "/api/start":
+                result = start_training(payload)
+            elif route == "/api/evaluate":
+                result = start_evaluation(payload)
+            elif route == "/api/stop":
+                result = stop_job()
+            else:
+                self.send_json({"error": "接口不存在"}, HTTPStatus.NOT_FOUND)
+                return
+            self.send_json(result)
+        except (ValueError, json.JSONDecodeError) as exc:
+            self.send_json({"error": str(exc)}, HTTPStatus.BAD_REQUEST)
+        except Exception as exc:
+            self.send_json({"error": f"服务器错误：{exc}"}, HTTPStatus.INTERNAL_SERVER_ERROR)
+
+
+def main() -> None:
+    global AUTH_TOKEN
+    parser = argparse.ArgumentParser(description="Qwen3.5 v5 训练网页控制台")
+    parser.add_argument("--host", default="0.0.0.0")
+    parser.add_argument("--port", type=int, default=9875)
+    parser.add_argument("--token", default=os.environ.get("DASHBOARD_TOKEN", ""))
+    args = parser.parse_args()
+    AUTH_TOKEN = args.token or secrets.token_urlsafe(24)
+    RUNS.mkdir(parents=True, exist_ok=True)
+    DASHBOARD_DIR.mkdir(parents=True, exist_ok=True)
+    print(f"Dashboard: http://{args.host}:{args.port}/?token={AUTH_TOKEN}", flush=True)
+    server = ThreadingHTTPServer((args.host, args.port), Handler)
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()

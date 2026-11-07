@@ -1,0 +1,29 @@
+{
+  "version": "v8-real-plus-synthetic-boundaries-01",
+  "base_single_control": 474,
+  "synthetic_positive_in_train": 95,
+  "synthetic_negative_review_only": 19,
+  "combined_single_control": 569,
+  "replay": 207,
+  "mixed_train": 776,
+  "synthetic_controls": 19,
+  "synthetic_source_chars": {
+    "min": 645,
+    "max": 1061
+  },
+  "synthetic_long_targets_over_100": 15,
+  "synthetic_by_boundary": {
+    "label_value_linebreak": 19,
+    "long_value": 19,
+    "short_value": 19,
+    "similar_label_distractor": 19,
+    "spaced_label": 19
+  },
+  "rules": {
+    "single_document_under_4000_chars": true,
+    "plain_text_no_html": true,
+    "positive_gold_occurs_exactly_once": true,
+    "negative_samples_excluded_from_train_pending_review": true,
+    "synthetic_samples_labeled_in_metadata": true
+  }
+}

@@ -1,0 +1,2 @@
+{"epoch": 1, "update": 1, "total_updates": 1, "loss": 0.08940169960260391, "learning_rate": 0.0002, "max_memory_gb": 12.176}
+{"epoch": 1, "validation_loss": 0.09165314584970474, "checkpoint": "/root/medical-v5/runs/smoke-v5/checkpoint-epoch-1"}

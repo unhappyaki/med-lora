@@ -1,0 +1,57 @@
+{
+  "status": "PASS",
+  "counts": {
+    "single_control_auto_pass": 416,
+    "single_control_flagged_not_in_train": 12,
+    "replay": 207,
+    "mixed_train": 623,
+    "unique_cases": 320,
+    "unique_controls": 63
+  },
+  "coverage": {
+    "groups": {
+      "admission": 237,
+      "discharge": 19,
+      "first_progress": 46,
+      "outpatient": 64,
+      "short_vital": 20,
+      "surgery": 30
+    },
+    "hospitals": {
+      "合成边界数据": 25,
+      "柳城县人民医院": 22,
+      "泉州市儿童医院": 32,
+      "石狮市妇幼保健院": 317,
+      "邵武市中医院": 20
+    },
+    "document_types": {
+      "24小时内入出院记录": 8,
+      "入院记录": 232,
+      "出院小结": 11,
+      "初诊": 60,
+      "合成单份病历": 25,
+      "复诊": 4,
+      "手术记录": 30,
+      "首次病程记录": 46
+    }
+  },
+  "checks": {
+    "content_issue_count": 0,
+    "validation_overlap_count": 0,
+    "duplicate_auto_id_count": 0,
+    "duplicate_replay_id_count": 0,
+    "duplicate_mixed_id_count": 0,
+    "mixed_membership_ok": true,
+    "over_case_limit_count": 0,
+    "over_control_limit_count": 0
+  },
+  "details": {
+    "content_issues": [],
+    "validation_overlaps": [],
+    "duplicate_auto_ids": [],
+    "duplicate_replay_ids": [],
+    "duplicate_mixed_ids": [],
+    "over_case_limit": {},
+    "over_control_limit": {}
+  }
+}

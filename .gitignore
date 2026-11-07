@@ -1,0 +1,9 @@
+*.log
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_*
+
+__pycache__/

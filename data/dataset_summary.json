@@ -1,0 +1,88 @@
+{
+  "version": "v7-single-control-first-batch-r3",
+  "generated_at": "2026-11-05",
+  "task": "full_record_plus_one_control_to_exact_source_value",
+  "new_single_control": 283,
+  "flagged_for_review": 6,
+  "replay": 207,
+  "mixed_train": 490,
+  "mix_ratio": {
+    "single_control": 0.577551,
+    "replay": 0.422449
+  },
+  "single_control_by_hospital": {
+    "柳城县人民医院": 22,
+    "泉州市儿童医院": 32,
+    "石狮市妇幼保健院": 209,
+    "邵武市中医院": 20
+  },
+  "single_control_by_group": {
+    "admission": 178,
+    "discharge": 19,
+    "first_progress": 18,
+    "outpatient": 38,
+    "surgery": 30
+  },
+  "single_control_by_document_type": {
+    "24小时内入出院记录": 8,
+    "入院记录": 178,
+    "出院小结": 11,
+    "初诊": 35,
+    "复诊": 3,
+    "手术记录": 30,
+    "首次病程记录": 18
+  },
+  "priority_error_samples": 161,
+  "unique_single_control_cases": 196,
+  "unique_controls": 58,
+  "replay_by_source": {
+    "replay_v5": 176,
+    "replay_v6": 31
+  },
+  "excluded_validation_cases": {
+    "four_hospital_eval_cases": 33,
+    "four_hospital_eval_rows": 443,
+    "v5_validation_cases": 29,
+    "db_records_excluded_as_validation_near_duplicate": 13,
+    "replay_rows_excluded_as_validation_near_duplicate": 5,
+    "strict_postcheck_excluded_cases": 12,
+    "strict_postcheck_excluded_rows": 19
+  },
+  "quality_rules": {
+    "html_removed": true,
+    "deidentified": true,
+    "paragraph_fields_excluded": true,
+    "identity_fields_excluded": true,
+    "strict_source_traceability_required": true,
+    "template_placeholders_excluded": true,
+    "control_code_echo_excluded": true,
+    "assistant_outputs_plain_value_only": true,
+    "validation_near_duplicate_filter": true,
+    "max_controls_per_case": 3,
+    "max_samples_per_control": 14
+  },
+  "db_audit_status": {
+    "auto_pass": 283,
+    "excluded": 10924,
+    "not_selected": 1275,
+    "flagged": 6
+  },
+  "db_excluded_reasons": {
+    "empty_source": 520,
+    "not_traceable_to_source": 5404,
+    "label_or_code_echo": 202,
+    "identity_field": 6,
+    "value_too_short": 272,
+    "four_hospital_eval": 11,
+    "v5_validation": 2,
+    "duplicate_control_value": 4434,
+    "template_placeholder": 1,
+    "invalid_control_code": 53,
+    "strict_validation_near_duplicate_case": 19
+  },
+  "strict_postcheck_exclusion": {
+    "excluded_cases": 12,
+    "excluded_rows": 19,
+    "reason": "near_duplicate_with_held_out_validation"
+  }
+}

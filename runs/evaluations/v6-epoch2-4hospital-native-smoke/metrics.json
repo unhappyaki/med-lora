@@ -1,0 +1,458 @@
+{
+  "model": "/root/qwen35-0.8b-base",
+  "adapter": "/root/medical-v5/runs/lora-r16-v6-supplement-02/checkpoint-epoch-2",
+  "data": "/root/medical-v5/data/eval_4hospital_native_v6.jsonl",
+  "overall": {
+    "cases": 3,
+    "json_valid_rate": 1.0,
+    "schema_valid_rate": 1.0,
+    "usable_rate": 1.0,
+    "repair_used_cases": 0,
+    "repair_salvaged_cases": 0,
+    "needs_fallback_cases": 1,
+    "validation_dropped_fields": 2,
+    "hit_max_new_tokens_cases": 0,
+    "retry_used_cases": 0,
+    "chunk_attempted_cases": 0,
+    "model_fallback_attempted_cases": 0,
+    "human_review_required_cases": 1,
+    "human_review_rate": 0.333333,
+    "exact": {
+      "tp": 0,
+      "fp": 43,
+      "fn": 36,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "whitespace_normalized": {
+      "tp": 0,
+      "fp": 43,
+      "fn": 36,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "grounding_rate": 1.0,
+    "case_exact_rate": 0.0,
+    "long_extraction_recall": 0.0
+  },
+  "stage_metrics": {
+    "raw_strict": {
+      "cases": 3,
+      "usable_rate": 1.0,
+      "exact": {
+        "tp": 0,
+        "fp": 45,
+        "fn": 36,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      }
+    },
+    "repair_salvage": {
+      "cases": 3,
+      "usable_rate": 1.0,
+      "exact": {
+        "tp": 0,
+        "fp": 43,
+        "fn": 36,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      }
+    },
+    "retry_selected": {
+      "cases": 3,
+      "usable_rate": 1.0,
+      "exact": {
+        "tp": 0,
+        "fp": 43,
+        "fn": 36,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      }
+    },
+    "chunk_merged": {
+      "cases": 3,
+      "usable_rate": 1.0,
+      "exact": {
+        "tp": 0,
+        "fp": 43,
+        "fn": 36,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      }
+    },
+    "final": {
+      "cases": 3,
+      "usable_rate": 1.0,
+      "exact": {
+        "tp": 0,
+        "fp": 43,
+        "fn": 36,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      }
+    }
+  },
+  "by_document_type": {
+    "入院记录": {
+      "cases": 1,
+      "json_valid_rate": 1.0,
+      "schema_valid_rate": 1.0,
+      "usable_rate": 1.0,
+      "repair_used_cases": 0,
+      "repair_salvaged_cases": 0,
+      "needs_fallback_cases": 1,
+      "validation_dropped_fields": 2,
+      "hit_max_new_tokens_cases": 0,
+      "retry_used_cases": 0,
+      "chunk_attempted_cases": 0,
+      "model_fallback_attempted_cases": 0,
+      "human_review_required_cases": 1,
+      "human_review_rate": 1.0,
+      "exact": {
+        "tp": 0,
+        "fp": 26,
+        "fn": 34,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "whitespace_normalized": {
+        "tp": 0,
+        "fp": 26,
+        "fn": 34,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "grounding_rate": 1.0,
+      "case_exact_rate": 0.0,
+      "long_extraction_recall": 0.0
+    },
+    "出院小结": {
+      "cases": 1,
+      "json_valid_rate": 1.0,
+      "schema_valid_rate": 1.0,
+      "usable_rate": 1.0,
+      "repair_used_cases": 0,
+      "repair_salvaged_cases": 0,
+      "needs_fallback_cases": 0,
+      "validation_dropped_fields": 0,
+      "hit_max_new_tokens_cases": 0,
+      "retry_used_cases": 0,
+      "chunk_attempted_cases": 0,
+      "model_fallback_attempted_cases": 0,
+      "human_review_required_cases": 0,
+      "human_review_rate": 0.0,
+      "exact": {
+        "tp": 0,
+        "fp": 12,
+        "fn": 1,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "whitespace_normalized": {
+        "tp": 0,
+        "fp": 12,
+        "fn": 1,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "grounding_rate": 1.0,
+      "case_exact_rate": 0.0,
+      "long_extraction_recall": 0.0
+    },
+    "首次病程记录": {
+      "cases": 1,
+      "json_valid_rate": 1.0,
+      "schema_valid_rate": 1.0,
+      "usable_rate": 1.0,
+      "repair_used_cases": 0,
+      "repair_salvaged_cases": 0,
+      "needs_fallback_cases": 0,
+      "validation_dropped_fields": 0,
+      "hit_max_new_tokens_cases": 0,
+      "retry_used_cases": 0,
+      "chunk_attempted_cases": 0,
+      "model_fallback_attempted_cases": 0,
+      "human_review_required_cases": 0,
+      "human_review_rate": 0.0,
+      "exact": {
+        "tp": 0,
+        "fp": 5,
+        "fn": 1,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "whitespace_normalized": {
+        "tp": 0,
+        "fp": 5,
+        "fn": 1,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "grounding_rate": 1.0,
+      "case_exact_rate": 0.0,
+      "long_extraction_recall": 0.0
+    }
+  },
+  "by_difficulty": {
+    "standard": {
+      "cases": 3,
+      "json_valid_rate": 1.0,
+      "schema_valid_rate": 1.0,
+      "usable_rate": 1.0,
+      "repair_used_cases": 0,
+      "repair_salvaged_cases": 0,
+      "needs_fallback_cases": 1,
+      "validation_dropped_fields": 2,
+      "hit_max_new_tokens_cases": 0,
+      "retry_used_cases": 0,
+      "chunk_attempted_cases": 0,
+      "model_fallback_attempted_cases": 0,
+      "human_review_required_cases": 1,
+      "human_review_rate": 0.333333,
+      "exact": {
+        "tp": 0,
+        "fp": 43,
+        "fn": 36,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "whitespace_normalized": {
+        "tp": 0,
+        "fp": 43,
+        "fn": 36,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "grounding_rate": 1.0,
+      "case_exact_rate": 0.0,
+      "long_extraction_recall": 0.0
+    }
+  },
+  "per_case": [
+    {
+      "id": "sharingcode::石狮::emr22-79b1163709e684dd",
+      "document_type": "首次病程记录",
+      "cases": 1,
+      "json_valid": 1,
+      "repair_used": 0,
+      "repair_salvaged": 0,
+      "schema_valid": 1,
+      "usable": 1,
+      "needs_fallback": 0,
+      "validation_dropped_fields": 0,
+      "hit_max_new_tokens": 0,
+      "retry_used": 0,
+      "chunk_attempted": 0,
+      "model_fallback_attempted": 0,
+      "human_review_required": 0,
+      "tp": 0,
+      "fp": 5,
+      "fn": 1,
+      "normalized_tp": 0,
+      "normalized_fp": 5,
+      "normalized_fn": 1,
+      "predicted": 5,
+      "grounded": 5,
+      "case_exact": 0,
+      "long_tp": 0,
+      "long_fn": 0,
+      "stages": {
+        "raw_strict": {
+          "tp": 0,
+          "fp": 5,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0
+        },
+        "repair_salvage": {
+          "tp": 0,
+          "fp": 5,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0
+        },
+        "retry_selected": {
+          "tp": 0,
+          "fp": 5,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0
+        },
+        "chunk_merged": {
+          "tp": 0,
+          "fp": 5,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0
+        },
+        "final": {
+          "tp": 0,
+          "fp": 5,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0
+        }
+      }
+    },
+    {
+      "id": "sharingcode::石狮::emr22-a4b0f0e9fded8c0d",
+      "document_type": "入院记录",
+      "cases": 1,
+      "json_valid": 1,
+      "repair_used": 0,
+      "repair_salvaged": 0,
+      "schema_valid": 1,
+      "usable": 1,
+      "needs_fallback": 1,
+      "validation_dropped_fields": 2,
+      "hit_max_new_tokens": 0,
+      "retry_used": 0,
+      "chunk_attempted": 0,
+      "model_fallback_attempted": 0,
+      "human_review_required": 1,
+      "tp": 0,
+      "fp": 26,
+      "fn": 34,
+      "normalized_tp": 0,
+      "normalized_fp": 26,
+      "normalized_fn": 34,
+      "predicted": 26,
+      "grounded": 26,
+      "case_exact": 0,
+      "long_tp": 0,
+      "long_fn": 5,
+      "stages": {
+        "raw_strict": {
+          "tp": 0,
+          "fp": 28,
+          "fn": 34,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0
+        },
+        "repair_salvage": {
+          "tp": 0,
+          "fp": 26,
+          "fn": 34,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0
+        },
+        "retry_selected": {
+          "tp": 0,
+          "fp": 26,
+          "fn": 34,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0
+        },
+        "chunk_merged": {
+          "tp": 0,
+          "fp": 26,
+          "fn": 34,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0
+        },
+        "final": {
+          "tp": 0,
+          "fp": 26,
+          "fn": 34,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0
+        }
+      }
+    },
+    {
+      "id": "sharingcode::石狮::emr22-535f433a7dd2689e",
+      "document_type": "出院小结",
+      "cases": 1,
+      "json_valid": 1,
+      "repair_used": 0,
+      "repair_salvaged": 0,
+      "schema_valid": 1,
+      "usable": 1,
+      "needs_fallback": 0,
+      "validation_dropped_fields": 0,
+      "hit_max_new_tokens": 0,
+      "retry_used": 0,
+      "chunk_attempted": 0,
+      "model_fallback_attempted": 0,
+      "human_review_required": 0,
+      "tp": 0,
+      "fp": 12,
+      "fn": 1,
+      "normalized_tp": 0,
+      "normalized_fp": 12,
+      "normalized_fn": 1,
+      "predicted": 12,
+      "grounded": 12,
+      "case_exact": 0,
+      "long_tp": 0,
+      "long_fn": 0,
+      "stages": {
+        "raw_strict": {
+          "tp": 0,
+          "fp": 12,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0
+        },
+        "repair_salvage": {
+          "tp": 0,
+          "fp": 12,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0
+        },
+        "retry_selected": {
+          "tp": 0,
+          "fp": 12,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0
+        },
+        "chunk_merged": {
+          "tp": 0,
+          "fp": 12,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0
+        },
+        "final": {
+          "tp": 0,
+          "fp": 12,
+          "fn": 1,
+          "precision": 0.0,
+          "recall": 0.0,
+          "f1": 0.0
+        }
+      }
+    }
+  ]
+}

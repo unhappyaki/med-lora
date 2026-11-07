@@ -1,0 +1,75 @@
+{
+  "model": "/root/qwen35-0.8b-base",
+  "adapter": null,
+  "data": "/root/medical-v5/data/validation_v5.jsonl",
+  "overall": {
+    "cases": 1,
+    "json_valid_rate": 1.0,
+    "schema_valid_rate": 1.0,
+    "exact": {
+      "tp": 0,
+      "fp": 1,
+      "fn": 5,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "whitespace_normalized": {
+      "tp": 0,
+      "fp": 1,
+      "fn": 5,
+      "precision": 0.0,
+      "recall": 0.0,
+      "f1": 0.0
+    },
+    "grounding_rate": 0.0,
+    "case_exact_rate": 0.0,
+    "long_extraction_recall": 0.0
+  },
+  "by_document_type": {
+    "首次病程记录": {
+      "cases": 1,
+      "json_valid_rate": 1.0,
+      "schema_valid_rate": 1.0,
+      "exact": {
+        "tp": 0,
+        "fp": 1,
+        "fn": 5,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "whitespace_normalized": {
+        "tp": 0,
+        "fp": 1,
+        "fn": 5,
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0
+      },
+      "grounding_rate": 0.0,
+      "case_exact_rate": 0.0,
+      "long_extraction_recall": 0.0
+    }
+  },
+  "per_case": [
+    {
+      "id": "emr22-030fb15000cb26df",
+      "document_type": "首次病程记录",
+      "cases": 1,
+      "json_valid": 1,
+      "schema_valid": 1,
+      "tp": 0,
+      "fp": 1,
+      "fn": 5,
+      "normalized_tp": 0,
+      "normalized_fp": 1,
+      "normalized_fn": 5,
+      "predicted": 1,
+      "grounded": 0,
+      "case_exact": 0,
+      "long_tp": 0,
+      "long_fn": 3
+    }
+  ]
+}

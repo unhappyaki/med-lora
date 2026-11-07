@@ -1,0 +1,23 @@
+{
+  "version": "v8-targeted-boundaries-01",
+  "base_single_control": 391,
+  "targeted_positive": 25,
+  "mixed_train": 623,
+  "variants_per_control": 5,
+  "targeted_by_boundary": {
+    "paired_bp_value": 5,
+    "repeated_vital_anchor": 10,
+    "semantic_distractor": 5,
+    "temperature_boundary": 5
+  },
+  "targeted_by_control": {
+    "体格检查-收缩压（mm-Hg）": 5,
+    "体格检查-脉率（次/min）": 5,
+    "体温（℃）": 5,
+    "入院时情况": 5,
+    "呼吸频率（次/min）": 5
+  },
+  "all_grounded": true,
+  "single_document_under_4000_chars": true,
+  "plain_text_no_html": true
+}

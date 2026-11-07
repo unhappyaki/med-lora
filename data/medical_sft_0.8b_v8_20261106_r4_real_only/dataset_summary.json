@@ -1,0 +1,14 @@
+{
+  "version": "v8-supervision-clean-r2",
+  "single_control": 474,
+  "replay": 207,
+  "mixed_train": 681,
+  "changed_rows": 8,
+  "changes": {
+    "leading_delimiter_removed": 5,
+    "redundant_unit_removed": 3
+  },
+  "excluded_synthetic_positive": 95,
+  "remaining_leading_delimiter": 0,
+  "all_single_control_gold_grounded": true
+}

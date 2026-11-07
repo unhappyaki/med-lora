@@ -1,0 +1,118 @@
+{
+  "version": "v8-data-review-01",
+  "inputs": {
+    "eval_rows": 443,
+    "train_rows": 490,
+    "single_control_train_rows": 283,
+    "flagged_train_candidates": 6
+  },
+  "review": {
+    "auto_candidates": 92,
+    "manual_review": 351,
+    "issue_counts": {
+      "gold_not_in_source": 289,
+      "model_prediction_not_grounded": 19,
+      "model_low_char_f1": 149,
+      "html_in_raw_value": 6,
+      "label_only_gold": 19,
+      "template_or_placeholder_gold": 59,
+      "model_format_wrapped": 19,
+      "model_empty_prediction": 3,
+      "label_prefix_in_gold": 72,
+      "identity_field": 2,
+      "malformed_age": 1,
+      "suspicious_zero_vital": 4,
+      "punctuation_only_gold": 1
+    }
+  },
+  "training_distribution": {
+    "hospitals": {
+      "柳城县人民医院": 22,
+      "泉州市儿童医院": 32,
+      "邵武市中医院": 20,
+      "石狮市妇幼保健院": 209
+    },
+    "unique_control_names": 44,
+    "source_length": {
+      "max": 3282,
+      "under_2000": 124,
+      "2000_to_3999": 159,
+      "4000_to_7999": 0,
+      "8000_plus": 0
+    },
+    "target_length": {
+      "1_to_5": 131,
+      "6_to_20": 53,
+      "21_to_100": 68,
+      "over_100": 31
+    },
+    "missing_target_count": 0
+  },
+  "evaluation_distribution": {
+    "hospitals": {
+      "石狮": 82,
+      "柳城人民": 198,
+      "邵武中医院": 49,
+      "泉州儿童医院": 114
+    },
+    "unique_control_names": 71,
+    "control_names_not_covered_after_basic_alias_normalization": [
+      "一般情况",
+      "一般情况检查结果",
+      "中医“四诊”观察结果",
+      "中医治则治法",
+      "住院诊疗经过",
+      "体格检查-全身浅表淋巴结检查结果",
+      "体格检查-外生殖器检查结果",
+      "体格检查-收缩压（mm-Hg)",
+      "体格检查-皮肤和黏膜检査结果",
+      "体格检查-胸部检査结果",
+      "体格检查-腹部检查结果",
+      "体格检查-颈部检查结果",
+      "体格检査-体温rc)",
+      "体格检査-四肢检査结果",
+      "体格检査-头部及其器官检查结果",
+      "体格检査-肛门指诊检査结果描述",
+      "体格检査-脊柱检査结果",
+      "入院时情况",
+      "入院时病情摘要",
+      "全身浅表淋巴结检查结果",
+      "出院时情况",
+      "外生殖器检查结果",
+      "头部及其器官检查结果",
+      "婚姻史",
+      "婚育史",
+      "平素健康状况",
+      "性别",
+      "月经及婚育史",
+      "淋巴结检查结果描述",
+      "病史陈述可靠性",
+      "皮肤黏膜检查结果",
+      "神经系统检查结果",
+      "肛门及外生殖器检查结果",
+      "肛门指诊检查结果描述",
+      "肛门检查结果",
+      "胸部检查结果",
+      "脊柱及四肢检查结果",
+      "腹部检查结果",
+      "诊疗经过",
+      "输血量（ml）",
+      "颈部检查结果"
+    ]
+  },
+  "requested_new_data": {
+    "target_clean_single_control_examples": 300,
+    "hospital_target": {
+      "柳城县人民医院": 90,
+      "泉州市儿童医院": 75,
+      "邵武市中医院": 65,
+      "石狮市妇幼保健院": 70
+    },
+    "negative_or_placeholder_only_ratio": "20%-30%",
+    "long_source_minimum": {
+      "4000_to_7999": 70,
+      "8000_to_16000": 50
+    },
+    "long_target_over_100_minimum": 60
+  }
+}

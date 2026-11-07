@@ -1,0 +1,19 @@
+{
+  "status": "任务完成",
+  "kind": "evaluate",
+  "pid": 2243,
+  "run_name": "v7-r3-epoch2-4hospital-single-control",
+  "run_dir": "/root/medical-v5/runs/evaluations/v7-r3-epoch2-4hospital-single-control",
+  "job_log": "/root/medical-v5/runs/evaluations/v7-r3-epoch2-4hospital-single-control/dashboard_job.log",
+  "started_at": "2026-11-06T02:23:10",
+  "adapter": "/root/medical-v5/runs/lora-r16-v7-single-control-r3-02/checkpoint-epoch-2",
+  "command": [
+    "python",
+    "evaluate_single_control.py",
+    "--batch-size",
+    "16",
+    "--prompt-mode",
+    "original"
+  ],
+  "ended_at": "2026-11-06T02:34:24"
+}

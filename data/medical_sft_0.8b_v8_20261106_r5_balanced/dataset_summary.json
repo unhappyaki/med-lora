@@ -1,0 +1,23 @@
+{
+  "version": "v8-real-long-fields-balanced-01",
+  "v7_single_control_anchor": 283,
+  "new_real_kept": 108,
+  "new_real_excluded": 83,
+  "excluded_new_controls": {
+    "体温": 23,
+    "体重": 26,
+    "呼吸频率": 8,
+    "脉率": 26
+  },
+  "new_real_kept_controls": {
+    "主诉": 28,
+    "既往史": 26,
+    "月经史": 1,
+    "现病史": 27,
+    "辅助检查结果": 26
+  },
+  "single_control": 391,
+  "replay": 207,
+  "mixed_train": 598,
+  "synthetic_positive_in_train": 0
+}

@@ -1,0 +1,15 @@
+{
+  "version": "v8-clean-single-control-validation-01",
+  "samples": 92,
+  "cases": 19,
+  "hospitals": {
+    "柳城人民": 4,
+    "泉州儿童医院": 34,
+    "石狮": 32,
+    "邵武中医院": 22
+  },
+  "unique_controls": 31,
+  "all_gold_exactly_grounded": true,
+  "html_removed": true,
+  "training_overlap_filtered_by_v8_quality_check": true
+}

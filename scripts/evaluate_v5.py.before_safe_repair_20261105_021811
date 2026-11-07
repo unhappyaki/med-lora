@@ -1,0 +1,286 @@
+from __future__ import annotations
+
+import argparse
+import json
+import re
+from collections import Counter, defaultdict
+from pathlib import Path
+
+import torch
+from peft import PeftModel
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+
+def chat_template(tokenizer, messages: list[dict], **kwargs):
+    try:
+        result = tokenizer.apply_chat_template(
+            messages, enable_thinking=False, **kwargs
+        )
+    except TypeError:
+        result = tokenizer.apply_chat_template(messages, **kwargs)
+    if kwargs.get("tokenize") and hasattr(result, "get"):
+        result = result.get("input_ids")
+    if kwargs.get("tokenize") and hasattr(result, "tolist"):
+        result = result.tolist()
+    if (
+        kwargs.get("tokenize")
+        and isinstance(result, list)
+        and len(result) == 1
+        and isinstance(result[0], list)
+    ):
+        result = result[0]
+    return result
+
+
+def load_text_model(model_path: str):
+    common = {
+        "torch_dtype": torch.bfloat16,
+        "trust_remote_code": True,
+        "low_cpu_mem_usage": True,
+    }
+    try:
+        from transformers import AutoModelForImageTextToText
+
+        return AutoModelForImageTextToText.from_pretrained(model_path, **common)
+    except (ImportError, ValueError):
+        return AutoModelForCausalLM.from_pretrained(model_path, **common)
+
+
+def load_jsonl(path: Path) -> list[dict]:
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+
+
+def extract_source(user_content: str) -> str:
+    return user_content.split("Q: ", 1)[-1].rsplit("\nA:", 1)[0]
+
+
+def parse_json_response(text: str) -> tuple[dict | None, str | None]:
+    cleaned = text.strip()
+    cleaned = re.sub(r"^```(?:json)?\s*", "", cleaned, flags=re.I)
+    cleaned = re.sub(r"\s*```$", "", cleaned)
+    try:
+        return json.loads(cleaned), None
+    except json.JSONDecodeError as first_error:
+        start = cleaned.find("{")
+        end = cleaned.rfind("}")
+        if start >= 0 and end > start:
+            try:
+                return json.loads(cleaned[start : end + 1]), None
+            except json.JSONDecodeError:
+                pass
+        return None, str(first_error)
+
+
+def validate_payload(payload: dict | None) -> tuple[list[tuple[str, str]], bool]:
+    if not isinstance(payload, dict) or set(payload) != {"extractions"}:
+        return [], False
+    if not isinstance(payload["extractions"], list):
+        return [], False
+    pairs: list[tuple[str, str]] = []
+    for item in payload["extractions"]:
+        if not isinstance(item, dict) or set(item) != {
+            "slot",
+            "slot_attributes",
+        }:
+            return [], False
+        attributes = item["slot_attributes"]
+        if not isinstance(item["slot"], str) or not isinstance(attributes, dict):
+            return [], False
+        field_name = attributes.get("field_name")
+        if not isinstance(field_name, str) or not field_name:
+            return [], False
+        pairs.append((field_name, item["slot"]))
+    return pairs, True
+
+
+def normalize_text(value: str) -> str:
+    return re.sub(r"\s+", "", value.replace("\u00a0", " "))
+
+
+def counter_score(
+    predicted: list[tuple[str, str]], gold: list[tuple[str, str]]
+) -> tuple[int, int, int]:
+    predicted_counter = Counter(predicted)
+    gold_counter = Counter(gold)
+    true_positive = sum((predicted_counter & gold_counter).values())
+    return true_positive, len(predicted) - true_positive, len(gold) - true_positive
+
+
+def safe_div(numerator: int, denominator: int) -> float:
+    return numerator / denominator if denominator else 0.0
+
+
+def finalize_score(tp: int, fp: int, fn: int) -> dict:
+    precision = safe_div(tp, tp + fp)
+    recall = safe_div(tp, tp + fn)
+    f1 = safe_div(2 * precision * recall, precision + recall)
+    return {
+        "tp": tp,
+        "fp": fp,
+        "fn": fn,
+        "precision": round(precision, 6),
+        "recall": round(recall, 6),
+        "f1": round(f1, 6),
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Qwen3.5 病历抽取 v5 统一评测")
+    parser.add_argument("--model", required=True)
+    parser.add_argument("--adapter")
+    parser.add_argument("--data", required=True)
+    parser.add_argument("--output-dir", required=True)
+    parser.add_argument("--max-new-tokens", type=int, default=4096)
+    parser.add_argument("--limit", type=int, default=0)
+    args = parser.parse_args()
+
+    if not torch.cuda.is_available():
+        raise RuntimeError("评测脚本需要 CUDA")
+    torch.backends.cuda.matmul.allow_tf32 = True
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    predictions_path = output_dir / "predictions.jsonl"
+
+    tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
+    if tokenizer.pad_token_id is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    model = load_text_model(args.model)
+    if args.adapter:
+        model = PeftModel.from_pretrained(model, args.adapter)
+    model.cuda().eval()
+
+    rows = load_jsonl(Path(args.data))
+    if args.limit > 0:
+        rows = rows[: args.limit]
+    completed: dict[str, dict] = {}
+    if predictions_path.exists():
+        for item in load_jsonl(predictions_path):
+            completed[item["id"]] = item
+
+    results: list[dict] = []
+    for position, row in enumerate(rows, start=1):
+        if row["id"] in completed:
+            results.append(completed[row["id"]])
+            continue
+        prompt_text = chat_template(
+            tokenizer,
+            row["messages"][:2],
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+        inputs = tokenizer(prompt_text, return_tensors="pt", add_special_tokens=False)
+        inputs = {key: value.cuda() for key, value in inputs.items()}
+        with torch.inference_mode():
+            generated = model.generate(
+                **inputs,
+                do_sample=False,
+                max_new_tokens=args.max_new_tokens,
+                pad_token_id=tokenizer.pad_token_id,
+                eos_token_id=tokenizer.eos_token_id,
+            )
+        response_ids = generated[0, inputs["input_ids"].shape[1] :]
+        response = tokenizer.decode(response_ids, skip_special_tokens=True)
+        payload, parse_error = parse_json_response(response)
+        predicted_pairs, schema_valid = validate_payload(payload)
+        result = {
+            "id": row["id"],
+            "document_type": row["metadata"]["document_type"],
+            "response": response,
+            "payload": payload,
+            "parse_error": parse_error,
+            "schema_valid": schema_valid,
+            "predicted_pairs": predicted_pairs,
+            "gold": json.loads(row["messages"][2]["content"]),
+        }
+        with predictions_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(result, ensure_ascii=False) + "\n")
+        results.append(result)
+        print(f"[{position}/{len(rows)}] {row['id']} schema={schema_valid}", flush=True)
+
+    totals = Counter()
+    by_document: dict[str, Counter] = defaultdict(Counter)
+    by_difficulty: dict[str, Counter] = defaultdict(Counter)
+    per_case: list[dict] = []
+    for row, result in zip(rows, results):
+        source = extract_source(row["messages"][1]["content"])
+        gold_payload = json.loads(row["messages"][2]["content"])
+        gold_pairs = [
+            (item["slot_attributes"]["field_name"], item["slot"])
+            for item in gold_payload["extractions"]
+        ]
+        predicted_pairs = [tuple(pair) for pair in result["predicted_pairs"]]
+        tp, fp, fn = counter_score(predicted_pairs, gold_pairs)
+        normalized_predicted = [
+            (field, normalize_text(text)) for field, text in predicted_pairs
+        ]
+        normalized_gold = [(field, normalize_text(text)) for field, text in gold_pairs]
+        ntp, nfp, nfn = counter_score(normalized_predicted, normalized_gold)
+        grounded = sum(bool(text) and text in source for _, text in predicted_pairs)
+        long_gold = [pair for pair in gold_pairs if len(pair[1]) >= 100]
+        ltp, _, lfn = counter_score(predicted_pairs, long_gold)
+        document_type = row["metadata"]["document_type"]
+        values = {
+            "cases": 1,
+            "json_valid": int(result["parse_error"] is None),
+            "schema_valid": int(result["schema_valid"]),
+            "tp": tp,
+            "fp": fp,
+            "fn": fn,
+            "normalized_tp": ntp,
+            "normalized_fp": nfp,
+            "normalized_fn": nfn,
+            "predicted": len(predicted_pairs),
+            "grounded": grounded,
+            "case_exact": int(Counter(predicted_pairs) == Counter(gold_pairs)),
+            "long_tp": ltp,
+            "long_fn": lfn,
+        }
+        totals.update(values)
+        by_document[document_type].update(values)
+        difficulty = "hard" if row["metadata"].get("hard_case") else "standard"
+        by_difficulty[difficulty].update(values)
+        per_case.append({"id": row["id"], "document_type": document_type, **values})
+
+    def metrics(counter: Counter) -> dict:
+        return {
+            "cases": counter["cases"],
+            "json_valid_rate": round(safe_div(counter["json_valid"], counter["cases"]), 6),
+            "schema_valid_rate": round(safe_div(counter["schema_valid"], counter["cases"]), 6),
+            "exact": finalize_score(counter["tp"], counter["fp"], counter["fn"]),
+            "whitespace_normalized": finalize_score(
+                counter["normalized_tp"],
+                counter["normalized_fp"],
+                counter["normalized_fn"],
+            ),
+            "grounding_rate": round(safe_div(counter["grounded"], counter["predicted"]), 6),
+            "case_exact_rate": round(safe_div(counter["case_exact"], counter["cases"]), 6),
+            "long_extraction_recall": round(
+                safe_div(counter["long_tp"], counter["long_tp"] + counter["long_fn"]), 6
+            ),
+        }
+
+    report = {
+        "model": args.model,
+        "adapter": args.adapter,
+        "data": args.data,
+        "overall": metrics(totals),
+        "by_document_type": {
+            key: metrics(value) for key, value in sorted(by_document.items())
+        },
+        "by_difficulty": {
+            key: metrics(value) for key, value in sorted(by_difficulty.items())
+        },
+        "per_case": per_case,
+    }
+    (output_dir / "metrics.json").write_text(
+        json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    print(json.dumps(report["overall"], ensure_ascii=False, indent=2))
+
+
+if __name__ == "__main__":
+    main()
