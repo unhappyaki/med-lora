@@ -1,0 +1,115 @@
+{
+  "strategy": "V13.1 targeted parent-child boundaries, verbatim copying, JSON stability, and balanced rehearsal",
+  "splits": {
+    "train": {
+      "count": 254,
+      "document_types": {
+        "术前讨论": 132,
+        "首次病程记录": 122
+      },
+      "buckets": {
+        "long_json_stability": 24,
+        "balanced_rehearsal": 120,
+        "first_course_verbatim_copy": 50,
+        "preop_parent_child_boundary": 60
+      },
+      "field_frequency": {
+        "讨论时间": 131,
+        "讨论地点": 118,
+        "主持人": 122,
+        "讨论范围": 1,
+        "参加人员": 126,
+        "术前诊断": 74,
+        "病历摘要": 2,
+        "讨论记录": 131,
+        "主持人小结意见": 119,
+        "手术指征": 71,
+        "手术禁忌症": 1,
+        "拟施手术名称和方式": 70,
+        "拟手术日期": 2,
+        "拟术者": 2,
+        "拟麻醉方式": 70,
+        "风险及注意事项": 69,
+        "姓名": 94,
+        "性别": 95,
+        "年龄": 114,
+        "记录者": 126,
+        "病历特点": 122,
+        "初步诊断": 101,
+        "诊断依据": 120,
+        "诊疗计划": 121,
+        "术前准备": 69,
+        "中医诊断": 17,
+        "证候": 13,
+        "西医诊断": 17,
+        "中医辨病辨证依据": 20,
+        "类证鉴别": 13,
+        "鉴别诊断": 37,
+        "入院诊断": 3,
+        "中医治则治法": 1,
+        "术中注意事项": 1,
+        "手术风险预测": 1
+      },
+      "max_source_chars": 3298,
+      "max_output_chars": 3631
+    },
+    "validation": {
+      "count": 48,
+      "document_types": {
+        "首次病程记录": 24,
+        "术前讨论": 24
+      },
+      "buckets": {
+        "first_course_verbatim_copy": 12,
+        "balanced_rehearsal": 16,
+        "preop_parent_child_boundary": 12,
+        "long_json_stability": 8
+      },
+      "field_frequency": {
+        "病历特点": 24,
+        "初步诊断": 20,
+        "诊断依据": 24,
+        "诊疗计划": 24,
+        "讨论时间": 24,
+        "讨论地点": 23,
+        "主持人": 23,
+        "参加人员": 23,
+        "讨论记录": 23,
+        "主持人小结意见": 23,
+        "记录者": 23,
+        "姓名": 19,
+        "性别": 19,
+        "年龄": 19,
+        "中医诊断": 4,
+        "证候": 4,
+        "西医诊断": 4,
+        "中医辨病辨证依据": 4,
+        "类证鉴别": 4,
+        "术前诊断": 11,
+        "手术指征": 11,
+        "拟施手术名称和方式": 11,
+        "拟麻醉方式": 11,
+        "术前准备": 11,
+        "风险及注意事项": 11,
+        "鉴别诊断": 4,
+        "病历摘要": 1
+      },
+      "max_source_chars": 1996,
+      "max_output_chars": 2446
+    },
+    "holdout": {
+      "count": 50,
+      "document_types": {
+        "首次病程记录": 30,
+        "术前讨论": 20
+      }
+    }
+  },
+  "source_overlap": {
+    "train_validation": 0,
+    "train_holdout": 0,
+    "validation_holdout": 0
+  },
+  "validation_errors": [],
+  "passed": true
+}

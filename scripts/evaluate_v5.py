@@ -8,7 +8,12 @@ from pathlib import Path
 
 import torch
 from peft import PeftModel
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import (
+    AutoModelForCausalLM,
+    AutoTokenizer,
+    StoppingCriteria,
+    StoppingCriteriaList,
+)
 
 from medical_text_quality import (
     clean_legacy_spacing_artifacts,
@@ -42,6 +47,50 @@ def chat_template(tokenizer, messages: list[dict], **kwargs):
     ):
         result = result[0]
     return result
+
+
+class JsonObjectCompleteStoppingCriteria(StoppingCriteria):
+    """Stop once the first top-level JSON object is syntactically closed."""
+
+    def __init__(self, tokenizer, prompt_tokens: int):
+        self.tokenizer = tokenizer
+        self.last_token = prompt_tokens
+        self.started = False
+        self.depth = 0
+        self.in_string = False
+        self.escaped = False
+
+    def __call__(self, input_ids, scores, **kwargs) -> bool:
+        new_tokens = input_ids[0, self.last_token :]
+        self.last_token = int(input_ids.shape[1])
+        fragment = self.tokenizer.decode(
+            new_tokens,
+            skip_special_tokens=False,
+            clean_up_tokenization_spaces=False,
+        )
+        for char in fragment:
+            if not self.started:
+                if char == "{":
+                    self.started = True
+                    self.depth = 1
+                continue
+            if self.in_string:
+                if self.escaped:
+                    self.escaped = False
+                elif char == "\\":
+                    self.escaped = True
+                elif char == '"':
+                    self.in_string = False
+                continue
+            if char == '"':
+                self.in_string = True
+            elif char == "{":
+                self.depth += 1
+            elif char == "}":
+                self.depth -= 1
+                if self.depth == 0:
+                    return True
+        return False
 
 
 def load_text_model(model_path: str):
@@ -109,19 +158,66 @@ def split_source(source: str, max_chars: int) -> list[str]:
 def merge_grounded_pairs(
     pair_groups: list[list[tuple[str, str]]], source: str
 ) -> list[tuple[str, str]]:
-    """Union fallback outputs without inventing more occurrences than the source."""
+    """Union fallback outputs without inventing occurrences or duplicate fields."""
     merged: list[tuple[str, str]] = []
     seen: Counter[tuple[str, str]] = Counter()
+    seen_fields: set[str] = set()
     for pairs in pair_groups:
         for field_name, slot in pairs:
             pair = (field_name, slot)
             if not slot or slot not in source:
                 continue
+            # The section schema requires each canonical field at most once.
+            # Chunk outputs may independently rediscover fields such as 年龄 or
+            # 记录者; keep the first grounded occurrence instead of concatenating
+            # conflicting values from different chunks.
+            if field_name in seen_fields:
+                continue
             if seen[pair] >= source.count(slot):
                 continue
             seen[pair] += 1
+            seen_fields.add(field_name)
             merged.append(pair)
     return merged
+
+
+def recover_unique_whitespace_span(slot: str, source: str) -> str | None:
+    """Map a whitespace-only model variant back to one exact source span.
+
+    Recovery is deliberately conservative: the non-whitespace text must be at
+    least eight characters and occur exactly once in the normalized source.
+    The returned value is always a literal, contiguous substring of ``source``.
+    """
+    target = normalize_text(slot)
+    if len(target) < 8:
+        return None
+
+    normalized_chars: list[str] = []
+    source_positions: list[int] = []
+    for index, character in enumerate(source):
+        if character == "\u00a0" or character.isspace():
+            continue
+        normalized_chars.append(character)
+        source_positions.append(index)
+    normalized_source = "".join(normalized_chars)
+
+    starts: list[int] = []
+    offset = 0
+    while True:
+        found = normalized_source.find(target, offset)
+        if found < 0:
+            break
+        starts.append(found)
+        if len(starts) > 1:
+            return None
+        offset = found + 1
+    if len(starts) != 1:
+        return None
+
+    start = starts[0]
+    end = start + len(target) - 1
+    candidate = source[source_positions[start] : source_positions[end] + 1]
+    return candidate if normalize_text(candidate) == target else None
 
 
 def parse_json_response(text: str) -> tuple[dict | None, str | None, bool]:
@@ -220,8 +316,11 @@ def salvage_prediction(
             errors.append(f"abnormal_symbol_repetition:{index}")
             continue
         if slot not in source:
-            errors.append(f"ungrounded_slot:{index}")
-            continue
+            recovered_slot = recover_unique_whitespace_span(slot, source)
+            if recovered_slot is None:
+                errors.append(f"ungrounded_slot:{index}")
+                continue
+            slot = recovered_slot
         if (
             len(field_name) > 64
             or "\n" in field_name
@@ -243,6 +342,12 @@ def salvage_prediction(
 
 def normalize_text(value: str) -> str:
     return re.sub(r"\s+", "", value.replace("\u00a0", " "))
+
+
+def clean_source_text(value: str) -> str:
+    value = clean_legacy_spacing_artifacts(value).replace("{", " ").replace("}", " ")
+    value = re.sub(r"[ \t]{2,}", " ", value)
+    return re.sub(r"[ \t]*([，。；：、,.!?！？])[ \t]*", r"\1", value)
 
 
 def counter_score(
@@ -368,6 +473,13 @@ def main() -> None:
             prompt_text, return_tensors="pt", add_special_tokens=False
         )
         inputs = {key: value.cuda() for key, value in inputs.items()}
+        stopping_criteria = StoppingCriteriaList(
+            [
+                JsonObjectCompleteStoppingCriteria(
+                    runtime_tokenizer, int(inputs["input_ids"].shape[1])
+                )
+            ]
+        )
         with torch.inference_mode():
             generated = runtime_model.generate(
                 **inputs,
@@ -376,6 +488,7 @@ def main() -> None:
                 repetition_penalty=repetition_penalty,
                 pad_token_id=runtime_tokenizer.pad_token_id,
                 eos_token_id=runtime_tokenizer.eos_token_id,
+                stopping_criteria=stopping_criteria,
             )
         response_ids = generated[0, inputs["input_ids"].shape[1] :]
         generated_tokens = int(response_ids.numel())
@@ -433,7 +546,7 @@ def main() -> None:
             continue
 
         raw_source = extract_source(row["messages"][1]["content"])
-        source = clean_legacy_spacing_artifacts(raw_source)
+        source = clean_source_text(raw_source)
         base_messages = [dict(message) for message in row["messages"][:2]]
         base_messages[1]["content"] = replace_source(
             base_messages[1]["content"], source
@@ -575,7 +688,7 @@ def main() -> None:
     by_difficulty: dict[str, Counter] = defaultdict(Counter)
     per_case: list[dict] = []
     for row, result in zip(rows, results):
-        source = clean_legacy_spacing_artifacts(
+        source = clean_source_text(
             extract_source(row["messages"][1]["content"])
         )
         gold_payload = json.loads(row["messages"][2]["content"])

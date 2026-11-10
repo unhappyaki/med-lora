@@ -6,4 +6,7 @@
 *.key
 id_*
 
+# V13.1 raw medical text lives in the private med-lora-data repository.
+data/medical_sft_v131_targeted_20261110/*.jsonl
+
 __pycache__/
