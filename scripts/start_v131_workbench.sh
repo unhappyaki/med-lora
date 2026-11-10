@@ -39,18 +39,20 @@ then
   exit 1
 fi
 
-export MODEL_DIR="$ROOT/inference/v131/model"
+export MODEL_DIR="${MODEL_DIR:-$ROOT/inference/v131/merged-model}"
 export ADAPTER_DIR="$ROOT/inference/v131/adapter"
 export SCHEMA_PATH="$ROOT/schemas/section_extraction_schema_v1.json"
 export SERVED_MODEL_NAME=medical-section-v131
 export WORKBENCH_TOKEN="$(cat "$TOKEN_FILE")"
+export VLLM_BASE_URL="${VLLM_BASE_URL:-http://127.0.0.1:9877/v1}"
+export VLLM_MODEL_NAME=medical-section-v131
 
 nohup "$PYTHON" -m uvicorn v131_inference_workbench:app \
   --app-dir "$ROOT/scripts" \
   --host 0.0.0.0 \
   --port "$PORT" \
   --workers 1 \
-  --timeout-keep-alive 300 \
+  --timeout-keep-alive 30 \
   --no-access-log \
   > "$LOG_FILE" 2>&1 &
 echo $! > "$PID_FILE"

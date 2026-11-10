@@ -6,6 +6,8 @@ import threading
 import time
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 import torch
 from fastapi import FastAPI, Header, HTTPException, Query
@@ -35,6 +37,8 @@ SCHEMA_PATH = Path(
 )
 API_TOKEN = os.environ.get("WORKBENCH_TOKEN", "")
 MODEL_NAME = os.environ.get("SERVED_MODEL_NAME", "medical-section-v131")
+VLLM_BASE_URL = os.environ.get("VLLM_BASE_URL", "").rstrip("/")
+VLLM_MODEL_NAME = os.environ.get("VLLM_MODEL_NAME", MODEL_NAME)
 SYSTEM_PROMPT = "You are a helpful assistant that responds in JSON format."
 
 app = FastAPI(title="V13.1 医疗大 Section 推理工作台", version="1.0")
@@ -60,25 +64,113 @@ class Message(BaseModel):
 class ChatRequest(BaseModel):
     model: str = MODEL_NAME
     messages: list[Message]
-    max_tokens: int = Field(default=4096, ge=1, le=4096)
+    max_tokens: int | None = Field(default=4096, ge=1, le=4096)
+    max_completion_tokens: int | None = Field(default=None, ge=1, le=4096)
     temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     top_p: float = Field(default=1.0, gt=0.0, le=1.0)
+    stream: bool = False
 
 
-def authorize(token: str | None, x_api_key: str | None) -> None:
-    if API_TOKEN and token != API_TOKEN and x_api_key != API_TOKEN:
+def authorize(
+    token: str | None,
+    x_api_key: str | None,
+    authorization: str | None = None,
+) -> None:
+    bearer = None
+    if authorization and authorization.lower().startswith("bearer "):
+        bearer = authorization[7:].strip()
+    if API_TOKEN and token != API_TOKEN and x_api_key != API_TOKEN and bearer != API_TOKEN:
         raise HTTPException(status_code=401, detail="Invalid workbench token")
 
 
 def ensure_ready() -> None:
     if startup_error:
         raise HTTPException(status_code=503, detail=startup_error)
-    if model is None or tokenizer is None:
+    if tokenizer is None or (not VLLM_BASE_URL and model is None):
         raise HTTPException(status_code=503, detail="Model is still loading")
 
 
-def run_generation(messages: list[dict[str, str]], max_new_tokens: int) -> dict[str, Any]:
+def run_vllm_generation(
+    messages: list[dict[str, str]],
+    max_new_tokens: int,
+    temperature: float,
+    top_p: float,
+) -> dict[str, Any]:
+    prompt = tokenizer.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=True,
+    )
+    prompt_tokens = len(
+        tokenizer(prompt, add_special_tokens=False).input_ids
+    )
+    body = json.dumps(
+        {
+            "model": VLLM_MODEL_NAME,
+            "messages": messages,
+            "max_tokens": max_new_tokens,
+            "temperature": temperature,
+            "top_p": top_p,
+            "repetition_penalty": 1.05,
+            "stream": False,
+        }
+    ).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if API_TOKEN:
+        headers["Authorization"] = f"Bearer {API_TOKEN}"
+    request = Request(
+        f"{VLLM_BASE_URL}/chat/completions",
+        data=body,
+        headers=headers,
+        method="POST",
+    )
+    started = time.perf_counter()
+    try:
+        with urlopen(request, timeout=600) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")
+        raise HTTPException(
+            status_code=502,
+            detail=f"vLLM backend HTTP {error.code}: {detail}",
+        ) from error
+    except (URLError, TimeoutError) as error:
+        raise HTTPException(
+            status_code=503,
+            detail=f"vLLM backend unavailable: {error}",
+        ) from error
+    elapsed = time.perf_counter() - started
+    choice = payload["choices"][0]
+    usage = payload.get("usage") or {}
+    response_text = choice["message"]["content"] or ""
+    generated_tokens = int(
+        usage.get("completion_tokens")
+        or len(tokenizer(response_text, add_special_tokens=False).input_ids)
+    )
+    return {
+        "response": response_text,
+        "prompt_tokens": int(usage.get("prompt_tokens") or prompt_tokens),
+        "generated_tokens": generated_tokens,
+        "elapsed_seconds": round(elapsed, 3),
+        "tokens_per_second": round(generated_tokens / elapsed, 3) if elapsed else None,
+        "hit_max_new_tokens": choice.get("finish_reason") == "length",
+    }
+
+
+def run_generation(
+    messages: list[dict[str, str]],
+    max_new_tokens: int,
+    temperature: float = 0.0,
+    top_p: float = 1.0,
+) -> dict[str, Any]:
     ensure_ready()
+    if VLLM_BASE_URL:
+        return run_vllm_generation(
+            messages,
+            max_new_tokens,
+            temperature,
+            top_p,
+        )
     prompt = tokenizer.apply_chat_template(
         messages,
         tokenize=False,
@@ -93,14 +185,20 @@ def run_generation(messages: list[dict[str, str]], max_new_tokens: int) -> dict[
 
     started = time.perf_counter()
     with model_lock, torch.inference_mode():
+        generation_kwargs: dict[str, Any] = {
+            "do_sample": temperature > 0,
+            "max_new_tokens": max_new_tokens,
+            "repetition_penalty": 1.05,
+            "pad_token_id": tokenizer.pad_token_id,
+            "eos_token_id": tokenizer.eos_token_id,
+            "stopping_criteria": stopping,
+        }
+        if temperature > 0:
+            generation_kwargs["temperature"] = temperature
+            generation_kwargs["top_p"] = top_p
         output = model.generate(
             **inputs,
-            do_sample=False,
-            max_new_tokens=max_new_tokens,
-            repetition_penalty=1.05,
-            pad_token_id=tokenizer.pad_token_id,
-            eos_token_id=tokenizer.eos_token_id,
-            stopping_criteria=stopping,
+            **generation_kwargs,
         )
         torch.cuda.synchronize()
     elapsed = time.perf_counter() - started
@@ -126,13 +224,14 @@ def startup() -> None:
         tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR, trust_remote_code=True)
         if tokenizer.pad_token_id is None:
             tokenizer.pad_token = tokenizer.eos_token
-        base_model = load_text_model(MODEL_DIR).cuda()
-        model = (
-            PeftModel.from_pretrained(base_model, ADAPTER_DIR)
-            .merge_and_unload(safe_merge=True)
-            .eval()
-        )
-        torch.backends.cuda.matmul.allow_tf32 = True
+        if not VLLM_BASE_URL:
+            base_model = load_text_model(MODEL_DIR).cuda()
+            model = (
+                PeftModel.from_pretrained(base_model, ADAPTER_DIR)
+                .merge_and_unload(safe_merge=True)
+                .eval()
+            )
+            torch.backends.cuda.matmul.allow_tf32 = True
         loaded_at = time.time()
     except Exception as error:  # pragma: no cover - surfaced through /health
         startup_error = f"{type(error).__name__}: {error}"
@@ -140,13 +239,34 @@ def startup() -> None:
 
 @app.get("/health")
 def health() -> dict[str, Any]:
+    backend_error = None
+    backend_ready = True
+    if VLLM_BASE_URL:
+        health_url = f"{VLLM_BASE_URL.removesuffix('/v1')}/health"
+        try:
+            with urlopen(health_url, timeout=2) as response:
+                backend_ready = response.status == 200
+        except (HTTPError, URLError, TimeoutError) as error:
+            backend_ready = False
+            backend_error = f"vLLM backend unavailable: {error}"
+    ready = (
+        tokenizer is not None
+        and backend_ready
+        and (bool(VLLM_BASE_URL) or model is not None)
+    )
+    effective_error = startup_error or backend_error
     return {
-        "status": "ok" if model is not None and not startup_error else "loading_or_error",
-        "ready": model is not None and not startup_error,
-        "error": startup_error,
+        "status": "ok" if ready and not effective_error else "loading_or_error",
+        "ready": ready and not effective_error,
+        "error": effective_error,
         "model": MODEL_NAME,
-        "backend": "transformers-merged-lora-persistent",
+        "backend": (
+            "vllm-merged-persistent-proxy"
+            if VLLM_BASE_URL
+            else "transformers-merged-lora-persistent"
+        ),
         "adapter_merged": True,
+        "backend_ready": backend_ready,
         "device": "cuda:0" if torch.cuda.is_available() else "unavailable",
         "loaded_at": loaded_at,
         "document_types": list(schema),
@@ -158,8 +278,9 @@ def extract(
     request: ExtractRequest,
     token: str | None = Query(default=None),
     x_api_key: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    authorize(token, x_api_key)
+    authorize(token, x_api_key, authorization)
     ensure_ready()
     if request.document_type not in schema:
         raise HTTPException(
@@ -208,8 +329,9 @@ def extract(
 def models(
     token: str | None = Query(default=None),
     x_api_key: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    authorize(token, x_api_key)
+    authorize(token, x_api_key, authorization)
     return {
         "object": "list",
         "data": [{"id": MODEL_NAME, "object": "model", "owned_by": "local"}],
@@ -221,12 +343,22 @@ def chat_completions(
     request: ChatRequest,
     token: str | None = Query(default=None),
     x_api_key: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
 ) -> dict[str, Any]:
-    authorize(token, x_api_key)
+    authorize(token, x_api_key, authorization)
     if request.model != MODEL_NAME:
         raise HTTPException(status_code=404, detail=f"Unknown model: {request.model}")
+    if request.stream:
+        raise HTTPException(
+            status_code=400,
+            detail="stream=true is not enabled; use the non-streaming OpenAI endpoint",
+        )
+    completion_limit = request.max_completion_tokens or request.max_tokens or 4096
     result = run_generation(
-        [message.model_dump() for message in request.messages], request.max_tokens
+        [message.model_dump() for message in request.messages],
+        completion_limit,
+        temperature=request.temperature,
+        top_p=request.top_p,
     )
     now = int(time.time())
     return {
@@ -295,6 +427,7 @@ run.onclick=async()=>{{
 def index(
     token: str | None = Query(default=None),
     x_api_key: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
 ) -> str:
-    authorize(token, x_api_key)
+    authorize(token, x_api_key, authorization)
     return page_html()
