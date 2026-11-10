@@ -26,6 +26,12 @@
 
 当前策略是先完成端到端评测和统一 Gold 修订，暂不继续追加训练。复盘见 `docs/V13.1训练评测与残留问题复盘_20261110.md`。
 
+### V13.1 推理工作台
+
+`scripts/v131_inference_workbench.py` 提供带鉴权的浏览器工作台、`/extract` 抽取接口和 OpenAI 兼容接口；`scripts/start_v131_workbench.sh` 将模型常驻在 GPU 并默认监听 `0.0.0.0:9876`。工作台会执行病历 `{}` 清洗、V2 大 Section Prompt、JSON 解析、Schema 校验和严格 grounding，并返回 token 数、耗时及生成速度。
+
+当前生产测试后端使用常驻 Transformers，以稳定性优先。vLLM 已识别 Qwen3.5 与 LoRA，但首次运行需要完整的 FlashInfer 采样内核环境，完成兼容性验证前不替换稳定后端。
+
 ## 当前离线性能
 
 单控件任务按字段评分；字段完全匹配不等于整份病历完全正确。不同评测集来源和样本不同，不能直接横向比较。
