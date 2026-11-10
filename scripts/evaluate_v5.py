@@ -381,6 +381,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Qwen3.5 病历抽取 v5 统一评测")
     parser.add_argument("--model", required=True)
     parser.add_argument("--adapter")
+    parser.add_argument(
+        "--keep-adapter-unmerged",
+        action="store_true",
+        help="诊断开关：保留 PEFT 动态 LoRA；默认合并 adapter 以提高推理速度",
+    )
     parser.add_argument("--data", required=True)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--max-new-tokens", type=int, default=4096)
@@ -421,10 +426,12 @@ def main() -> None:
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token = tokenizer.eos_token
-    model = load_text_model(args.model)
+    model = load_text_model(args.model).cuda()
     if args.adapter:
         model = PeftModel.from_pretrained(model, args.adapter)
-    model.cuda().eval()
+        if not args.keep_adapter_unmerged:
+            model = model.merge_and_unload(safe_merge=True)
+    model.eval()
 
     rows = load_jsonl(Path(args.data))
     if args.limit > 0:
@@ -445,13 +452,15 @@ def main() -> None:
             )
             if fallback_tokenizer.pad_token_id is None:
                 fallback_tokenizer.pad_token = fallback_tokenizer.eos_token
-            fallback_model = load_text_model(args.fallback_model)
+            fallback_model = load_text_model(args.fallback_model).cuda()
             if args.fallback_adapter:
                 fallback_model = PeftModel.from_pretrained(
                     fallback_model, args.fallback_adapter
                 )
+                if not args.keep_adapter_unmerged:
+                    fallback_model = fallback_model.merge_and_unload(safe_merge=True)
             fallback_runtime["tokenizer"] = fallback_tokenizer
-            fallback_runtime["model"] = fallback_model.cuda().eval()
+            fallback_runtime["model"] = fallback_model.eval()
         return fallback_runtime["model"], fallback_runtime["tokenizer"]
 
     def attempt_rank(attempt: dict) -> tuple[int, int, int, int, int, int]:

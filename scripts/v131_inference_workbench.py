@@ -126,8 +126,12 @@ def startup() -> None:
         tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR, trust_remote_code=True)
         if tokenizer.pad_token_id is None:
             tokenizer.pad_token = tokenizer.eos_token
-        base_model = load_text_model(MODEL_DIR)
-        model = PeftModel.from_pretrained(base_model, ADAPTER_DIR).cuda().eval()
+        base_model = load_text_model(MODEL_DIR).cuda()
+        model = (
+            PeftModel.from_pretrained(base_model, ADAPTER_DIR)
+            .merge_and_unload(safe_merge=True)
+            .eval()
+        )
         torch.backends.cuda.matmul.allow_tf32 = True
         loaded_at = time.time()
     except Exception as error:  # pragma: no cover - surfaced through /health
@@ -141,7 +145,8 @@ def health() -> dict[str, Any]:
         "ready": model is not None and not startup_error,
         "error": startup_error,
         "model": MODEL_NAME,
-        "backend": "transformers-persistent",
+        "backend": "transformers-merged-lora-persistent",
+        "adapter_merged": True,
         "device": "cuda:0" if torch.cuda.is_available() else "unavailable",
         "loaded_at": loaded_at,
         "document_types": list(schema),

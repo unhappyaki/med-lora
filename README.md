@@ -28,9 +28,11 @@
 
 ### V13.1 推理工作台
 
-`scripts/v131_inference_workbench.py` 提供带鉴权的浏览器工作台、`/extract` 抽取接口和 OpenAI 兼容接口；`scripts/start_v131_workbench.sh` 将模型常驻在 GPU 并默认监听 `0.0.0.0:9876`。工作台会执行病历 `{}` 清洗、V2 大 Section Prompt、JSON 解析、Schema 校验和严格 grounding，并返回 token 数、耗时及生成速度。
+`scripts/v131_inference_workbench.py` 提供带鉴权的浏览器工作台、`/extract` 抽取接口和 OpenAI 兼容接口；`scripts/start_v131_workbench.sh` 将模型常驻在 GPU 并默认监听 `0.0.0.0:9876`。工作台启动时将 LoRA 安全合并到基础模型，避免 PEFT 动态 adapter 在逐 token 解码时产生额外小矩阵 kernel。工作台会执行病历 `{}` 清洗、V2 大 Section Prompt、JSON 解析、Schema 校验和严格 grounding，并返回 token 数、耗时及生成速度。
 
 当前生产测试后端使用常驻 Transformers，以稳定性优先。vLLM 已识别 Qwen3.5 与 LoRA，但首次运行需要完整的 FlashInfer 采样内核环境，完成兼容性验证前不替换稳定后端。
+
+`scripts/evaluate_v5.py` 同样默认合并 adapter；仅诊断动态 PEFT 行为时使用 `--keep-adapter-unmerged`。`scripts/benchmark_v131_lora_runtime.py` 可复现基础模型、动态 LoRA 和合并 LoRA 的固定 token 对照基准。
 
 ## 当前离线性能
 
